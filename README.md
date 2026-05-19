@@ -57,7 +57,7 @@ GraphMind brings together cognitive narrative parsing, high-performance simulati
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick Start (Web Interface)
 
 ### 1. Configure Credentials
 Open the App Settings in the interface, select **System Core**, paste your own free API Token credentials key (Gemini AI, OpenAI, DeepSeek, or Groq), and press save.
@@ -67,6 +67,69 @@ Double-click inside the **Input Signal** field and paste your narrative essays, 
 
 ### 3. Trace Neural Graph
 Select your favorite AI engine, choose a template parser mode, and trigger **Execute Trace**. Watch as characters, locations, and events populate an interactive canvas.
+
+---
+
+## 💻 Local Setup & Developer Guide
+
+Follow these instructions to run the GraphMind server and client workspace on your local machine.
+
+### 1. Verification & Repository Installation
+First, clone the codebase assets to your terminal and install the project dependencies:
+
+```bash
+# Clone repository assets
+git clone https://github.com/your-username/graphmind-ai.git
+cd graphmind-ai
+
+# Install high-performance workspace dependencies
+npm install
+```
+
+### 2. Configure Local Environment Variables
+Create a local `.env` configuration file in the project's root folder based on our environment template:
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` in your text editor and furnish your authentication parameters and API keys:
+
+```env
+# Google Gemini Generative API core key (Accessed server-side only)
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Firebase Admin SDK Configuration (Optional, for neural repository cloud saving/sharing)
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=your-service-account-email
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
+```
+
+> ⚠️ **Key Safety Rules**: To prevent security breaches, server-side API keys (`GEMINI_API_KEY` etc.) are kept private and never exposed to client browsers. Never prefix sensitive keys with `VITE_`.
+
+### 3. Setup Firebase Core Databases (Configuring Persistence)
+If you wish to utilize cloud saves, collaboration deep-links, and the neural archive explorer:
+1. Navigate to the **[Google Firebase Console](https://console.firebase.google.com/)** and provision a new project.
+2. Under **Build**, activate **Firestore Database** in production or test mode.
+3. Deploy safety validation filters locally using our schema file `firestore.rules` or configure them inside the rules interface tab.
+4. Download your workspace frontend project variables config helper copy (often named `firebase-applet-config.json` or config object settings) and place it in the app workspace root to authorize client sessions.
+
+### 4. Directing Dev Run Engines & Ports
+
+GraphMind runs as an Express backend utilizing a modern Vite dev server middleware proxy. Launch the local dev server using:
+
+```bash
+# Spark the Express proxy backend and client workspace
+npm run dev
+```
+
+*   **Port Config**: The dev integration server is set to run by default on **port `3000`** (`http://localhost:3000`).
+*   **Compile Bundles for Production**:
+    ```bash
+    npm run build
+    npm run start
+    ```
+    This triggers Vite's build compiler to output optimized static HTML components in `dist/` and runs Esbuild to bundle the Express `server.ts` proxy controller into a standalone CommonJS execution file (`dist/server.cjs`).
 
 ---
 
