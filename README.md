@@ -1,9 +1,6 @@
-# ██████╗ ██████╗  █████╗ ██████╗ ██╗  ██╗███╗   ███╗██╗███╗   ██╗██████╗ 
-# ██╔════╝ ██╔══██╗██╔══██╗██╔══██╗██║  ██║████╗ ████║██║████╗  ██║██╔══██╗
-# ██║  ███╗██████╔╝███████║██████╔╝███████║██╔████╔██║██║██╔██╗ ██║██║  ██║
-# ██║   ██║██╔══██╗██╔══██║██╔═══╝ ██╔══██║██║╚██╔╝██║██║██║╚██╗██║██║  ██║
-# ╚██████╔╝██║  ██║██║  ██║██║     ██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██████╔╝
-#  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═════╝ 
+# 🧠 GraphMind AI
+
+> **Interactive Neural Tracing Workspace & Story Architecture Engine** 
 
 GraphMind is a premium, full-featured neural tracing workspace built in React 19, TypeScript, and D3.js. Designed specifically for novelists, tabletop worldbuilders, screenplay editors, and narrative historians, the platform utilizes advanced Generative AI models to convert plain, unstructured text into dynamic, multi-layered interactive knowledge networks. It maps intricate systems of characters, places, events, factions, and evidence into fully responsive physical simulations, allowing users to unlock semantic structures and discover hidden story patterns.
 
