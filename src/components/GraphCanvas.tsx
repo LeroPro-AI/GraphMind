@@ -594,102 +594,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   return (
     <div ref={containerRef} className={`w-full h-full relative overflow-hidden flex flex-col ${settings.appearance.theme === 'light' ? 'bg-gray-50' : 'bg-[#0a0a0f]'}`} id="graph-viewport">
       
-      {/* 🛠️ Floating Layout Control Bar */}
-      <div className="hidden lg:flex absolute lg:top-4 lg:left-4 z-10 flex-row items-center gap-1 p-1 bg-black/40 backdrop-blur-md border border-white/10 rounded">
-        <button 
-          onClick={() => setLayout('force')}
-          className={`px-2.5 py-1.5 rounded text-[10px] font-medium tracking-wider uppercase transition-all flex items-center gap-1 ${layout === 'force' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/85'}`}
-          title="Force-Directed Layout"
-        >
-          <Network size={12} /> Force
-        </button>
-        <button 
-          onClick={() => setLayout('circular')}
-          className={`px-2.5 py-1.5 rounded text-[10px] font-medium tracking-wider uppercase transition-all flex items-center gap-1 ${layout === 'circular' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/85'}`}
-          title="Circular Layout"
-        >
-          <Orbit size={12} /> Circular
-        </button>
-        <button 
-          onClick={() => setLayout('tree')}
-          className={`px-2.5 py-1.5 rounded text-[10px] font-medium tracking-wider uppercase transition-all flex items-center gap-1 ${layout === 'tree' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/85'}`}
-          title="Hierarchical Tree Layout"
-        >
-          <GitFork size={12} className="rotate-180" /> Tree
-        </button>
-        <button 
-          onClick={() => setLayout('grid')}
-          className={`px-2.5 py-1.5 rounded text-[10px] font-medium tracking-wider uppercase transition-all flex items-center gap-1 ${layout === 'grid' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/85'}`}
-          title="Grid Matrix Layout"
-        >
-          <Grid size={12} /> Grid
-        </button>
-      </div>
-
       {/* SVG Canvas Area */}
       <div className="flex-1 w-full h-full relative">
         <svg ref={svgRef} className="w-full h-full cursor-move" />
       </div>
 
-      {/* 🧭 Timeline Sequence Playback Console */}
-      <div className="hidden lg:flex absolute bottom-4 left-4 right-4 z-10 p-3 bg-[#0c0c14]/90 backdrop-blur-md border border-white/5 rounded-lg flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-1.5 bg-white/5 rounded">
-            <Sliders size={14} className="text-white/60 animate-pulse" />
-          </div>
-          <div>
-            <h5 className="text-[10px] uppercase tracking-wider font-semibold text-white/50">Story Timeline Animation</h5>
-            <p className="text-[11px] font-serif text-white/90">
-              {timelineStep === null ? "Full Neural Map Visible" : `Sequence Stage: ${timelineStep} of ${data.nodes.length} Nodes`}
-            </p>
-          </div>
-        </div>
-
-        {/* Playback Controls */}
-        <div className="flex items-center gap-2">
-          {timelineStep === null ? (
-            <button 
-              onClick={handleTimelineStart}
-              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 transition-all rounded text-[10px] font-bold uppercase tracking-wider text-white flex items-center gap-1.5"
-            >
-              <Play size={10} fill="currentColor" /> Play Timeline
-            </button>
-          ) : (
-            <div className="flex items-center gap-1.5 bg-black/30 p-1 rounded border border-white/5">
-              <button 
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="p-1 text-white hover:bg-white/10 rounded transition-all"
-              >
-                {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
-              </button>
-              
-              {/* Manual step slider */}
-              <input 
-                type="range" 
-                min="1" 
-                max={data.nodes.length} 
-                value={timelineStep} 
-                onChange={(e) => {
-                  setIsPlaying(false);
-                  setTimelineStep(parseInt(e.target.value));
-                }}
-                className="w-24 md:w-36 h-1 rounded bg-white/10 accent-white" 
-              />
-
-              <button 
-                onClick={handleTimelineReset}
-                className="p-1 text-white/40 hover:text-white hover:bg-white/5 rounded transition-all"
-                title="Verify Full Graph"
-              >
-                <div className="text-[9px] px-1 font-bold uppercase">Exit</div>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Manual Status Indicator */}
-      <div className={`absolute top-4 right-4 text-[9px] uppercase tracking-[0.2em] pointer-events-none text-right ${settings.appearance.theme === 'light' ? 'text-gray-400' : 'text-gray-500'}`}>
+      <div className={`absolute bottom-4 right-4 text-[9px] uppercase tracking-[0.2em] pointer-events-none text-right ${settings.appearance.theme === 'light' ? 'text-gray-400' : 'text-gray-500'}`}>
         {isEditing ? (
           <div>
             Shift + Drag Node to Link<br />

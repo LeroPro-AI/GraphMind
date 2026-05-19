@@ -60,7 +60,8 @@ const App: React.FC = () => {
   const [view, setView] = useState<'canvas' | 'dashboard' | 'guide'>('canvas');
   const [extractions, setExtractions] = useState<any[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
+  const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
 
   // Mobile UI custom view states
   const [mobileDrawer, setMobileDrawer] = useState<'generate' | 'layout' | 'timeline' | 'menu' | null>(null);
@@ -755,6 +756,278 @@ const App: React.FC = () => {
     }
   };
 
+  const renderSidebarContent = () => (
+    <div className="flex flex-col h-full justify-between overflow-y-auto scrollbar-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-[#09090f] text-white">
+      <div className="p-5 space-y-6 flex-1">
+        {/* Logo */}
+        <header className="flex justify-between items-center pb-4 border-b border-white/5">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-white/5 rounded">
+              <Network size={16} className="text-amber-500 animate-pulse" />
+            </div>
+            <div>
+              <h1 className="font-serif italic text-lg tracking-wide leading-none">GraphMind</h1>
+              <span className="text-[8px] uppercase tracking-[0.35em] text-white/30 block mt-0.5">AI Neural Maps</span>
+            </div>
+          </div>
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="lg:hidden p-1.5 text-white/40 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        </header>
+
+        {/* Identity Auth State */}
+        <section className="space-y-3">
+          {user ? (
+            <div className="p-3 bg-white/[0.01] border border-white/10 rounded group flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-white overflow-hidden shrink-0">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt={user.displayName || ''} referrerPolicy="no-referrer" />
+                ) : (
+                  user.email?.substring(0, 2).toUpperCase()
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] font-bold text-white truncate">{user.displayName || 'Authorized User'}</p>
+                <div className="flex items-center gap-1">
+                  <span className="w-1 h-1 rounded-full bg-green-500" />
+                  <span className="text-[8px] font-mono text-white/40 uppercase tracking-wider">Cloud Connected</span>
+                </div>
+              </div>
+              <button 
+                onClick={logout}
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-white/30 hover:text-white transition-all ml-auto"
+                title="Terminate Link"
+              >
+                <LogOut size={12} />
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={handleLogin}
+              disabled={isLoggingIn}
+              className="w-full py-2 bg-white/5 border border-dashed border-white/15 text-white/60 text-[9px] uppercase tracking-widest hover:border-white/30 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isLoggingIn ? (
+                <Loader2 size={12} className="animate-spin text-white/45" />
+              ) : (
+                <LogIn size={12} className="text-white/40" />
+              )}
+              {isLoggingIn ? 'Connecting...' : 'Enable Cloud Sync'}
+            </button>
+          )}
+        </section>
+
+        {/* Navigation Tabs */}
+        <nav className="space-y-1.5 pt-2 border-t border-white/5">
+          <NavBtn 
+            active={view === 'canvas'} 
+            onClick={() => { setView('canvas'); if(window.innerWidth < 1024) setIsSidebarOpen(false); }} 
+            icon={<Network size={14} />} 
+            label="Protocol View" 
+          />
+          {user && (
+            <NavBtn 
+              active={view === 'dashboard'} 
+              onClick={() => { setView('dashboard'); if(window.innerWidth < 1024) setIsSidebarOpen(false); }} 
+              icon={<LayoutDashboard size={14} />} 
+              label="Neural Archives" 
+              count={extractions.length}
+            />
+          )}
+          <NavBtn 
+            active={view === 'guide'} 
+            onClick={() => { setView('guide'); if(window.innerWidth < 1024) setIsSidebarOpen(false); }} 
+            icon={<Info size={14} />} 
+            label="System Guide" 
+          />
+          <NavBtn 
+            active={isSettingsOpen} 
+            onClick={() => setIsSettingsOpen(true)} 
+            icon={<SettingsIcon size={14} />} 
+            label="System Configuration" 
+          />
+        </nav>
+
+        {/* AI Model & Keys Config */}
+        <section className="space-y-3 pt-3 border-t border-white/5">
+          <label className="text-[9px] tracking-[0.2em] uppercase font-bold text-white/40 block">AI Provider & Core</label>
+          <div className="space-y-2">
+            <div>
+              <label className="text-[8px] uppercase tracking-wider text-white/30 block mb-1">Provider</label>
+              <select 
+                value={settings.api.provider}
+                onChange={(e) => updateSettings({ api: { ...settings.api, provider: e.target.value as any } })}
+                className="w-full bg-[#12121e] border border-white/10 text-[10px] px-2 py-1.5 outline-none text-white rounded cursor-pointer hover:border-white/20"
+              >
+                <option value="gemini">Gemini Neural (Default)</option>
+                <option value="openai">OpenAI Synapse</option>
+                <option value="groq">Groq Engine</option>
+                <option value="aki">Aki.io Repository</option>
+              </select>
+            </div>
+
+            {/* Private API key input field */}
+            {settings.api.provider !== 'aki' && (
+              <div>
+                <label className="text-[8px] uppercase tracking-wider text-white/30 flex justify-between items-center mb-1">
+                  <span>API Key override</span>
+                  {!settings.api.keys?.[settings.api.provider as 'gemini' | 'openai' | 'groq'] && (
+                    <span className="text-[7px] text-green-400 uppercase tracking-widest font-mono font-bold animate-pulse">System Protected</span>
+                  )}
+                </label>
+                <input 
+                  type="password"
+                  value={settings.api.keys?.[settings.api.provider as 'gemini' | 'openai' | 'groq'] || ''}
+                  onChange={(e) => updateSettings({ 
+                    api: { 
+                      ...settings.api, 
+                      keys: { ...settings.api.keys, [settings.api.provider]: e.target.value } 
+                    } 
+                  })}
+                  placeholder={`Enter private ${settings.api.provider} token`}
+                  className="w-full bg-[#12121e] border border-white/10 text-xs px-2 py-1.5 outline-none text-white focus:border-white/20 transition-all font-mono rounded"
+                />
+              </div>
+            )}
+
+            {/* Model & Blueprint Selection */}
+            <div>
+              <label className="text-[8px] uppercase tracking-wider text-white/30 block mb-1">Context Blueprint</label>
+              <select 
+                value={settings.ai.mode}
+                onChange={(e) => updateSettings({ ai: { ...settings.ai, mode: e.target.value as any } })}
+                className="w-full bg-[#12121e] border border-white/10 text-[10px] px-2 py-1.5 outline-none text-white rounded cursor-pointer hover:border-white/20"
+              >
+                <option value="general">Standard Knowledge Map</option>
+                <option value="creative">Creative Bible (Manga/Game/World)</option>
+                <option value="academic">Academic Synthesis</option>
+                <option value="professional">Professional / Org Structure</option>
+                <option value="personal">Personal Archive / Travel</option>
+                <option value="detective">Detective Wall / Investigation</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        {/* Input Text Area section */}
+        <section className="space-y-2.5 pt-3 border-t border-white/5">
+          <div className="flex justify-between items-center">
+            <label className="text-[9px] tracking-[0.2em] uppercase font-bold text-white/40">
+              Input Text Stream
+            </label>
+            <button 
+              onClick={loadExample}
+              className="text-[8px] tracking-wider uppercase text-amber-500/70 hover:text-amber-500 font-bold"
+            >
+              Load Example
+            </button>
+          </div>
+          <textarea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Paste raw narrative outlines, character bio notes, logical streams or articles..."
+            className="w-full h-28 bg-[#12121e] border border-white/10 p-3 text-xs leading-relaxed text-white/80 focus:border-white/20 outline-none transition-all resize-none rounded"
+          />
+          <button
+            onClick={handleExtract}
+            disabled={isLoading || !inputText.trim()}
+            className={`w-full py-2.5 bg-amber-500 text-black text-[9px] uppercase tracking-[0.25em] font-bold hover:bg-amber-400 transition-all flex items-center justify-center gap-2 rounded ${
+              isLoading ? 'opacity-50 cursor-wait' : 
+              !inputText.trim() ? 'opacity-20 cursor-not-allowed' : 
+              'opacity-100'
+            }`}
+          >
+            {isLoading ? <Loader2 className="animate-spin text-black" size={12} /> : <Zap size={11} />}
+            {isLoading ? 'Tracing Neural Matrix...' : 'Generate Neural Map'}
+          </button>
+        </section>
+
+        {/* AI Assistants Trigger panel */}
+        {graphData && user && (
+          <section className="space-y-2 pt-3 border-t border-white/5">
+            <div className="text-[9px] tracking-[0.2em] uppercase font-bold text-white/40 flex items-center gap-1">
+              <Sparkles size={11} className="text-amber-500" /> Cognitive Assistants
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                onClick={handleAiSummarize}
+                disabled={isAiLoading || !graphData}
+                className="p-1.5 bg-white/5 border border-white/5 rounded text-[8px] uppercase tracking-wider font-bold hover:bg-white/10 text-white leading-none text-center"
+              >
+                Summarize
+              </button>
+              <button
+                onClick={handleAiDetectInconsistencies}
+                disabled={isAiLoading || !graphData}
+                className="p-1.5 bg-white/5 border border-white/5 rounded text-[8px] uppercase tracking-wider font-bold hover:bg-white/10 text-white leading-none text-center"
+              >
+                Audit Logic
+              </button>
+              <button
+                onClick={handleAiAutoComplete}
+                disabled={isAiLoading || !graphData}
+                className="col-span-2 p-2 bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20 rounded text-[8px] uppercase tracking-wider font-bold hover:bg-amber-500/20 text-white text-center flex items-center justify-center gap-1"
+              >
+                <Sparkles size={10} className="text-amber-500 animate-pulse" /> Auto-Extend Story
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Graph Physical / Appearance Controls at bottom */}
+        <section className="space-y-3 pt-3 border-t border-white/5">
+          <label className="text-[9px] tracking-[0.2em] uppercase font-bold text-white/40 block">Graph Calibration</label>
+          <div className="space-y-2 bg-[#12121e]/50 p-2 border border-white/5 rounded">
+            {/* Theme & Auto-Freeze sliders simplified for speed */}
+            <div className="flex justify-between items-center text-[9px] text-white/70">
+              <span className="uppercase tracking-wider">Aesthetic Theme</span>
+              <button 
+                onClick={() => updateSettings({ appearance: { ...settings.appearance, theme: settings.appearance.theme === 'dark' ? 'light' : 'dark' } })}
+                className="px-2 py-0.5 border border-white/10 rounded uppercase text-[8px] font-mono hover:bg-white/5"
+              >
+                {settings.appearance.theme} Mode
+              </button>
+            </div>
+
+            <div className="flex justify-between items-center text-[9px] text-white/70">
+              <span className="uppercase tracking-wider">Physics Auto-Freeze</span>
+              <button 
+                onClick={() => updateSettings({ physics: { ...settings.physics, autoFreeze: !settings.physics.autoFreeze } })}
+                className={`px-2 py-0.5 border border-white/10 rounded uppercase text-[8px] font-mono hover:bg-white/5 ${settings.physics.autoFreeze ? 'text-amber-500 border-amber-500/30' : ''}`}
+              >
+                {settings.physics.autoFreeze ? 'ENABLED' : 'DISABLED'}
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between text-[8px] text-white/40 uppercase font-mono">
+                <span>Cluster Spacing</span>
+                <span>{settings.physics.linkDistance}px</span>
+              </div>
+              <input 
+                type="range" min="50" max="400" step="10"
+                value={settings.physics.linkDistance}
+                onChange={(e) => updateSettings({ physics: { ...settings.physics, linkDistance: parseInt(e.target.value) } })}
+                className="w-full h-1 accent-white cursor-pointer"
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer className="p-4 border-t border-white/5 bg-[#07070d] flex justify-between items-center text-[8px] uppercase tracking-widest text-white/25">
+        <span>GM-SYSTEM-V2</span>
+        <div className="flex items-center gap-1 font-mono">
+          <div className={`w-1 h-1 rounded-full ${isLoading ? 'bg-amber-500 animate-ping' : 'bg-green-500'}`} />
+          ONLINE
+        </div>
+      </footer>
+    </div>
+  );
+
   return (
     <div className="flex h-screen w-full bg-bg text-[#E0E0E0] font-sans overflow-hidden relative">
       <div className="fixed inset-0 pointer-events-none z-50 opacity-[0.01] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,1)_2px,rgba(255,255,255,1)_4px)]" />
@@ -774,216 +1047,34 @@ const App: React.FC = () => {
       </header>
 
       {/* Sidebar Navigation */}
+      {/* Mobile sidebar (drawer style) */}
       <AnimatePresence>
         {isSidebarOpen && (
-          <motion.aside
-            initial={{ x: -320, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -320, opacity: 0 }}
-            className="fixed lg:static top-0 bottom-0 left-0 z-50 w-80 border-r border-white/5 bg-bg flex flex-col justify-between overflow-y-auto sidebar"
-          >
-            <main className="p-6 space-y-8 flex-1">
-              <header className="flex justify-between items-center h-16 border-b border-white/5">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white/5 rounded-sm">
-                    <Network size={18} className="text-amber-500" />
-                  </div>
-                  <div>
-                    <h1 className="font-serif italic text-2xl tracking-wide leading-none">GraphMind</h1>
-                    <span className="text-[8px] uppercase tracking-[0.45em] text-white/30 block mt-1">AI Neural Maps</span>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setIsSidebarOpen(false)}
-                  className="lg:hidden p-2 text-white/40 hover:text-white"
-                >
-                  <X size={20} />
-                </button>
-              </header>
-
-              {/* Identity Auth State */}
-              <section className="space-y-4">
-                {user ? (
-                  <div className="p-4 bg-white/[0.01] border border-white/5 rounded-sm relative group flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-white overflow-hidden">
-                      {user.photoURL ? (
-                        <img src={user.photoURL} alt={user.displayName || ''} referrerPolicy="no-referrer" />
-                      ) : (
-                        user.email?.substring(0, 2).toUpperCase()
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-bold text-white truncate">{user.displayName || 'Authorized User'}</p>
-                      <p className="text-[8px] font-mono text-white/40 truncate">{user.email}</p>
-                    </div>
-                    <button 
-                      onClick={logout}
-                      className="opacity-0 group-hover:opacity-100 p-2 text-white/30 hover:text-white transition-all ml-auto"
-                      title="Terminate Link"
-                    >
-                      <LogOut size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <button 
-                      onClick={handleLogin}
-                      disabled={isLoggingIn}
-                      className="w-full py-3 border border-dashed border-white/20 text-white/40 text-[10px] uppercase tracking-widest hover:border-white/40 hover:text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-wait"
-                    >
-                      {isLoggingIn ? (
-                        <Loader2 size={14} className="animate-spin text-white/40" />
-                      ) : (
-                        <LogIn size={14} />
-                      )}
-                      {isLoggingIn ? 'Connecting...' : 'Cloud Sync Disabled'}
-                    </button>
-                    {loginError && (
-                      <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-sm text-[10px] leading-relaxed relative">
-                        <div className="flex items-start gap-2 text-amber-500">
-                          <Info size={12} className="shrink-0 mt-0.5" />
-                          <div>
-                            <p className="font-bold uppercase tracking-widest text-[8px] mb-1">Access Restrained</p>
-                            <p className="text-white/75">{loginError}</p>
-                          </div>
-                        </div>
-                        <div className="mt-3 flex gap-2">
-                          <button 
-                            onClick={() => setLoginError(null)} 
-                            className="text-[9px] text-[#f5c842] uppercase tracking-widest font-semibold hover:underline"
-                          >
-                            Dismiss
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
-
-              {/* Navigation */}
-              <nav className="space-y-1">
-                <NavBtn 
-                  active={view === 'canvas'} 
-                  onClick={() => { setView('canvas'); if(window.innerWidth < 1024) setIsSidebarOpen(false); }} 
-                  icon={<Network size={16} />} 
-                  label="Protocol View" 
-                />
-                {user && (
-                  <NavBtn 
-                    active={view === 'dashboard'} 
-                    onClick={() => { setView('dashboard'); if(window.innerWidth < 1024) setIsSidebarOpen(false); }} 
-                    icon={<LayoutDashboard size={16} />} 
-                    label="Neural Archives" 
-                    count={extractions.length}
-                  />
-                )}
-                <NavBtn 
-                  active={view === 'guide'} 
-                  onClick={() => { setView('guide'); if(window.innerWidth < 1024) setIsSidebarOpen(false); }} 
-                  icon={<Info size={16} />} 
-                  label="System Guide" 
-                />
-                <NavBtn 
-                  active={isSettingsOpen} 
-                  onClick={() => setIsSettingsOpen(true)} 
-                  icon={<SettingsIcon size={16} />} 
-                  label="System Core" 
-                />
-              </nav>
-
-              <hr className="border-white/5" />
-
-              {/* Extraction Input */}
-              <section className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] tracking-[0.3em] uppercase font-bold text-white/40">
-                    Input Signal
-                  </label>
-                  <button 
-                    onClick={loadExample}
-                    className="text-[9px] tracking-widest uppercase text-white/20 hover:text-white"
-                  >
-                    Load Pulse
-                  </button>
-                </div>
-                <textarea
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Paste context for mapping..."
-                  className="w-full h-44 bg-white/[0.02] border border-white/10 p-4 text-xs leading-relaxed text-white/80 focus:border-white/30 outline-none transition-all resize-none rounded-sm"
-                />
-                <button
-                  onClick={handleExtract}
-                  disabled={isLoading || !inputText.trim()}
-                  className={`w-full py-4 border border-white text-white text-[10px] uppercase tracking-[0.4em] font-medium hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3 ${
-                    isLoading ? 'opacity-50 cursor-wait' : 
-                    !inputText.trim() ? 'opacity-20 cursor-not-allowed' : 
-                    'opacity-100'
-                  }`}
-                >
-                  {isLoading ? <Loader2 className="animate-spin" size={14} /> : <Zap size={14} />}
-                  {isLoading ? 'Processing Signal' : 'Execute Trace'}
-                </button>
-              </section>
-
-              {/* 🧠 AI Side Helpers Section */}
-              {graphData && user && (
-                <section className="space-y-3 pt-4 border-t border-white/5">
-                  <div className="text-[10px] tracking-[0.3em] uppercase font-bold text-white/45 flex items-center gap-1.5">
-                    <Sparkles size={11} className="text-amber-500 animate-pulse" /> AI Helpers
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      onClick={handleAiSummarize}
-                      disabled={isAiLoading}
-                      className="p-2 border border-white/5 rounded text-[9px] uppercase tracking-wider font-bold hover:bg-white/[0.03] text-white/70 hover:text-white transition-all text-center flex items-center justify-center gap-1"
-                    >
-                      Summarize
-                    </button>
-                    <button
-                      onClick={handleAiDetectInconsistencies}
-                      disabled={isAiLoading}
-                      className="p-2 border border-white/5 rounded text-[9px] uppercase tracking-wider font-bold hover:bg-white/[0.03] text-white/70 hover:text-white transition-all text-center flex items-center justify-center gap-1"
-                    >
-                      Audit Logic
-                    </button>
-                    <button
-                      onClick={handleAiAutoComplete}
-                      disabled={isAiLoading}
-                      className="col-span-2 p-2.5 rounded text-[9px] uppercase tracking-wider font-bold bg-white/5 border border-white/10 hover:bg-white/10 text-white transition-all text-center flex items-center justify-center gap-1.5 disabled:opacity-50"
-                    >
-                      {isAiLoading ? <Loader2 size={11} className="animate-spin text-white/40" /> : <Sparkles size={11} className="text-amber-500" />}
-                      Auto-Complete Story
-                    </button>
-                  </div>
-                </section>
-              )}
-
-              {/* Legend (Dynamic) */}
-              <section className="pt-4 border-t border-white/5">
-                <div className="text-[10px] tracking-[0.3em] uppercase font-bold text-white/30 mb-4">Neural Map Legend</div>
-                <div className="grid grid-cols-2 gap-x-2 gap-y-3 text-[9px] text-white/40 uppercase tracking-widest">
-                  {Object.entries(NODE_COLORS).slice(0, 8).map(([type, color]) => (
-                    <LegendItem key={type} color={color} label={type} />
-                  ))}
-                  <div className="flex items-center gap-2">
-                    <span className="opacity-50 italic">...+{Object.keys(NODE_COLORS).length - 8} more</span>
-                  </div>
-                </div>
-              </section>
-            </main>
-
-            <footer className="p-6 border-t border-white/5 flex justify-between items-center text-[9px] uppercase tracking-[0.2em] text-white/20">
-              <span>GM-SYSTEM-V2</span>
-              <div className="flex items-center gap-1.5 font-mono">
-                <div className={`w-1 h-1 rounded-full ${isLoading ? 'bg-amber-500' : 'bg-green-500'}`} />
-                ONLINE
-              </div>
-            </footer>
-          </motion.aside>
+          <div className="lg:hidden fixed inset-0 z-50 flex">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="absolute inset-0 bg-black"
+            />
+            <motion.aside
+              initial={{ x: -320 }}
+              animate={{ x: 0 }}
+              exit={{ x: -320 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="relative w-80 h-full max-w-[85vw] bg-bg flex flex-col z-10"
+            >
+              {renderSidebarContent()}
+            </motion.aside>
+          </div>
         )}
       </AnimatePresence>
+
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex w-80 h-full border-r border-white/5 bg-[#09090f] flex-col shrink-0">
+        {renderSidebarContent()}
+      </aside>
 
       {/* Error Banner */}
       <AnimatePresence>
@@ -992,7 +1083,7 @@ const App: React.FC = () => {
             initial={{ y: -100 }}
             animate={{ y: 0 }}
             exit={{ y: -100 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-md bg-red-650 backdrop-blur-md border border-red-500/30 text-white p-6 shadow-2xl flex items-start gap-4 bg-slate-900"
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-md bg-slate-900 border border-red-500/30 text-white p-6 shadow-2xl flex items-start gap-4"
           >
             <div className="p-2 bg-white/10 rounded-sm">
               <Info size={20} className="text-red-400" />
@@ -1015,135 +1106,92 @@ const App: React.FC = () => {
       </AnimatePresence>
 
       {/* Main Content Area */}
-      <main className={`flex-1 relative overflow-hidden flex flex-col transition-colors duration-500 ${settings.appearance.theme === 'light' ? 'bg-gray-50' : 'bg-bg'}`}>
-        {!isSidebarOpen && (
-          <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="absolute top-10 left-10 z-30 p-2 bg-white/5 border border-white/10 text-white/60 hover:text-white rounded-sm hidden lg:block"
-          >
-            <Menu size={20} />
-          </button>
-        )}
-
+      <main className={`flex-1 overflow-hidden flex flex-col transition-colors duration-500 ${settings.appearance.theme === 'light' ? 'bg-gray-50' : 'bg-bg'}`}>
         {view === 'canvas' ? (
-          <div className="flex-1 relative">
-            {/* Desktop-only Header */}
-            <header className={`hidden lg:flex absolute top-10 left-24 z-20 pointer-events-none flex-row lg:items-end gap-12 border-b pb-6 w-[85%] transition-colors duration-500 ${settings.appearance.theme === 'light' ? 'border-black/5' : 'border-white/5'}`}>
-              <div className="pointer-events-auto">
-                <h2 className={`text-[9px] tracking-[0.4em] uppercase font-bold mb-1 lg:mb-2 ${settings.appearance.theme === 'light' ? 'text-black/30' : 'text-white/30'}`}>Neural Visualization</h2>
+          <div className="flex-1 flex flex-col relative overflow-hidden">
+            {/* Slim 48px Topbar */}
+            <header className="h-12 border-b border-white/5 px-6 flex items-center justify-between shrink-0 bg-[#09090f]/70 backdrop-blur-md z-20">
+              {/* Left: Layout Switcher */}
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-sm">
+                {(['force', 'circular', 'tree', 'grid'] as const).map((l) => (
+                  <button 
+                    key={l}
+                    onClick={() => setLayout(l)} 
+                    className={`px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-wider font-mono transition-all ${layout === l ? 'bg-white text-black font-semibold' : 'text-white/50 hover:text-white'}`}
+                  >
+                    {l === 'force' ? 'Force' : l === 'circular' ? 'Circle' : l === 'tree' ? 'Tree' : 'Grid'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Center: Graph Title */}
+              <div className="flex-1 max-w-[30%] text-center px-4">
                 <input 
                   type="text" 
-                  value={graphData?.title || ''} 
+                  value={graphData?.title || 'No Neural Signal Loaded'} 
                   onChange={(e) => graphData && setGraphData({...graphData, title: e.target.value})}
                   disabled={!isEditing}
-                  className={`bg-transparent font-serif italic text-2xl lg:text-5xl outline-none focus:text-amber-500 transition-colors w-full disabled:cursor-default ${settings.appearance.theme === 'light' ? 'text-black' : 'text-white'}`}
+                  className="bg-transparent text-center font-serif text-sm italic outline-none focus:text-amber-500 transition-colors w-full truncate text-white"
+                  placeholder="Untitled Map"
                 />
               </div>
-              {graphData && (
-                <div className={`flex flex-wrap gap-x-4 gap-y-2 lg:gap-6 text-[9px] uppercase tracking-[0.2em] font-medium mb-1 lg:mb-2 pointer-events-auto items-center ${settings.appearance.theme === 'light' ? 'text-black/30' : 'text-white/30'}`}>
-                  <span>Nodes: <span className={settings.appearance.theme === 'light' ? 'text-black' : 'text-white'}>{graphData.nodes?.length || 0}</span></span>
-                  
-                  {/* Undo / Redo interface buttons */}
-                  <div className="flex items-center gap-1 px-2 py-0.5 bg-white/5 rounded border border-white/5">
-                    <button
-                      onClick={handleUndo}
-                      disabled={historyIndex <= 0}
-                      className="p-1 disabled:opacity-25 disabled:cursor-not-allowed hover:text-amber-500 transition-all text-white/70"
-                      title="Undo layout edit"
-                    >
-                      <Undo2 size={13} />
-                    </button>
-                    <span className="text-[8px] opacity-25">/</span>
-                    <button
-                      onClick={handleRedo}
-                      disabled={historyIndex >= history.length - 1}
-                      className="p-1 disabled:opacity-25 disabled:cursor-not-allowed hover:text-amber-500 transition-all text-white/70"
-                      title="Redo layout edit"
-                    >
-                      <Redo2 size={13} />
-                    </button>
-                  </div>
 
-                  <button 
-                    onClick={() => setIsEditing(!isEditing)}
-                    className={`px-3 py-1 border transition-all rounded-full ${
-                      isEditing 
-                        ? 'border-amber-500 text-amber-500' 
-                        : settings.appearance.theme === 'light' 
-                          ? 'border-black/10 text-black/40 hover:border-black hover:text-black' 
-                          : 'border-white/10 text-white/40 hover:border-white hover:text-white'
-                    }`}
+              {/* Right: Actions */}
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono opacity-50 uppercase tracking-widest hidden sm:inline">
+                  {graphData?.nodes?.length || 0} Nodes
+                </span>
+
+                <div className="flex items-center gap-1 bg-white/5 rounded-sm p-0.5">
+                  <button
+                    onClick={handleUndo}
+                    disabled={historyIndex <= 0}
+                    className="p-1 disabled:opacity-25 hover:text-amber-500 transition-all text-white/70"
+                    title="Undo layout edit"
                   >
-                    {isEditing ? 'EDIT: ON' : 'EDIT: OFF'}
+                    <Undo2 size={13} />
                   </button>
-                  {isEditing && (
-                    <div className={`flex flex-wrap items-center gap-2 lg:gap-4 lg:border-l lg:pl-6 lg:ml-2 ${settings.appearance.theme === 'light' ? 'border-black/10' : 'border-white/10'}`}>
-                      <button 
-                        onClick={handleAddNode} 
-                        className={`text-[9px] font-bold transition-all uppercase tracking-widest flex items-center gap-1.5 ${settings.appearance.theme === 'light' ? 'text-black/40 hover:text-black' : 'text-white/40 hover:text-white'}`}
-                      >
-                        <Zap size={10} className="text-amber-500/50" />
-                        Incubate Entity
-                      </button>
-                      
-                      <button 
-                        onClick={handleSaveProtocol} 
-                        disabled={saveStatus === 'saving'}
-                        className={`text-[9px] font-bold transition-all flex items-center gap-2 uppercase tracking-widest px-4 py-1.5 border rounded-sm ${
-                          saveStatus === 'saved' ? 'border-green-500/30 text-green-500 bg-green-500/5' : 
-                          saveStatus === 'error' ? 'border-red-500/30 text-red-500 bg-red-500/5' : 
-                          settings.appearance.theme === 'light'
-                            ? 'border-amber-500 text-amber-600 hover:bg-amber-500 font-bold'
-                            : 'border-amber-500 text-amber-500 hover:bg-white hover:text-black'
-                        }`}
-                      >
-                        {saveStatus === 'saving' ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : saveStatus === 'saved' ? (
-                          <Zap size={10} />
-                        ) : (
-                          <Network size={10} />
-                        )}
-                        {saveStatus === 'saving' ? 'Synching...' : saveStatus === 'saved' ? 'Archived' : saveStatus === 'error' ? 'Failed' : 'Commit Trace'}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Web Versions and Collaboration Utility Buttons */}
-                  <div className={`flex items-center gap-2 lg:gap-3 lg:border-l lg:pl-4 relative ${settings.appearance.theme === 'light' ? 'border-black/10' : 'border-white/10'}`}>
-                    <button 
-                      onClick={() => setIsVersionsDrawerOpen(!isVersionsDrawerOpen)}
-                      className={`text-[9px] font-bold px-3 py-1.5 rounded-sm border transition-all flex items-center gap-1.5 uppercase tracking-wider relative ${
-                        isVersionsDrawerOpen 
-                          ? 'border-amber-500 text-amber-500 bg-amber-500/5' 
-                          : settings.appearance.theme === 'light'
-                            ? 'border-black/5 text-black/60 hover:border-black/20 hover:text-black'
-                            : 'border-white/5 text-white/60 hover:border-white/25 hover:text-white'
-                      }`}
-                      title="Manage snapshots and branches"
-                    >
-                      <GitBranch size={11} className={isComparing ? "text-green-500 animate-pulse" : "text-amber-500"} />
-                      <span>Branches {currentVersions.length > 0 && `(${currentVersions.length})`}</span>
-                    </button>
-
-                    <button 
-                      onClick={() => setIsShareOverlayOpen(!isShareOverlayOpen)}
-                      className={`text-[9px] font-bold px-3 py-1.5 rounded-sm border transition-all flex items-center gap-1.5 uppercase tracking-wider ${
-                        isShareOverlayOpen || isGraphShared
-                          ? 'border-green-500 text-green-500 bg-green-500/5' 
-                          : settings.appearance.theme === 'light'
-                            ? 'border-black/5 text-black/60 hover:border-black/20 hover:text-black'
-                            : 'border-white/5 text-white/60 hover:border-white/25 hover:text-white'
-                      }`}
-                      title="Share and cooperate live"
-                    >
-                      <Share2 size={11} className={collabActive ? "text-green-400 animate-ping" : "text-emerald-500"} />
-                      <span>{isGraphShared ? 'Shared' : 'Share'}</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleRedo}
+                    disabled={historyIndex >= history.length - 1}
+                    className="p-1 disabled:opacity-25 hover:text-amber-500 transition-all text-white/70"
+                    title="Redo layout edit"
+                  >
+                    <Redo2 size={13} />
+                  </button>
                 </div>
-              )}
+
+                <button 
+                  onClick={() => setIsEditing(!isEditing)}
+                  className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 border rounded transition-all ${
+                    isEditing 
+                      ? 'border-amber-500 text-amber-500 bg-amber-500/10' 
+                      : 'border-white/10 text-white/50 hover:border-white/30 hover:text-white'
+                  }`}
+                >
+                  {isEditing ? 'Edit: ON' : 'Edit: OFF'}
+                </button>
+
+                <button 
+                  onClick={() => setIsVersionsDrawerOpen(!isVersionsDrawerOpen)}
+                  className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 border rounded transition-all ${
+                    isVersionsDrawerOpen ? 'border-amber-500 text-amber-500 bg-amber-500/10' : 'border-white/10 text-white/50 hover:border-white/30 hover:text-white'
+                  }`}
+                >
+                  Branches
+                </button>
+
+                <button 
+                  onClick={() => setIsShareOverlayOpen(!isShareOverlayOpen)}
+                  className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 border rounded transition-all ${
+                    isShareOverlayOpen ? 'border-green-500 text-green-500 bg-green-500/10' : 'border-white/10 text-white/50 hover:border-white/30 hover:text-white'
+                  }`}
+                >
+                  Share
+                </button>
+              </div>
             </header>
+
 
             {/* Mobile floating pill indicator */}
             {graphData && (
@@ -1771,19 +1819,99 @@ const App: React.FC = () => {
 
             <div className={`absolute inset-0 ${settings.appearance.theme === 'light' ? 'bg-gray-50' : 'bg-[#080808]'}`}>
               {graphData ? (
-                <GraphCanvas 
-                  data={getDisplayGraphData() || graphData} 
-                  onNodeClick={setSelectedNode} 
-                  isEditing={isEditing}
-                  onAddLink={handleAddLink}
-                  onDeleteLink={handleDeleteLink}
-                  layout={layout}
-                  setLayout={setLayout}
-                  timelineStep={timelineStep}
-                  setTimelineStep={setTimelineStep}
-                  isPlaying={isPlaying}
-                  setIsPlaying={setIsPlaying}
-                />
+                <>
+                  <GraphCanvas 
+                    data={getDisplayGraphData() || graphData} 
+                    onNodeClick={setSelectedNode} 
+                    isEditing={isEditing}
+                    onAddLink={handleAddLink}
+                    onDeleteLink={handleDeleteLink}
+                    layout={layout}
+                    setLayout={setLayout}
+                    timelineStep={timelineStep}
+                    setTimelineStep={setTimelineStep}
+                    isPlaying={isPlaying}
+                    setIsPlaying={setIsPlaying}
+                  />
+
+                  {/* Accordion Collapsible Story Timeline at very bottom of right panel */}
+                  <div className={`absolute bottom-0 left-0 right-0 z-20 border-t border-white/5 bg-[#09090f]/95 backdrop-blur-md transition-all duration-300 ${isTimelineExpanded ? 'h-36' : 'h-10'}`}>
+                    <div 
+                      onClick={() => setIsTimelineExpanded(!isTimelineExpanded)}
+                      className="h-10 px-4 flex items-center justify-between cursor-pointer select-none hover:bg-white/[0.02] transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Sliders size={13} className="text-amber-500 animate-pulse" />
+                        <span className="text-[10px] tracking-widest uppercase font-bold text-white/70">Story Timeline System</span>
+                        {timelineStep !== null && (
+                          <span className="text-[9px] font-mono text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded ml-2">
+                            Stage {timelineStep} of {graphData.nodes?.length || 0}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (timelineStep === null) {
+                              setTimelineStep(1);
+                            }
+                            setIsPlaying(!isPlaying);
+                          }}
+                          className="p-1 text-white hover:text-amber-500 transition-colors"
+                        >
+                          {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
+                        </button>
+                        <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest text-[8px]">
+                          {isTimelineExpanded ? 'Collapse' : 'Expand Timeline'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isTimelineExpanded && (
+                      <div className="px-4 pb-4 space-y-3">
+                        <p className="text-[10px] text-white/50 leading-relaxed font-sans font-light">
+                          Stagger the rendering of nodes to replay the sequence of event milestones and chronological layout introductions step-by-step.
+                        </p>
+
+                        <div className="flex items-center gap-4 bg-black/40 p-2.5 rounded border border-white/5">
+                          <button 
+                            onClick={() => setIsPlaying(!isPlaying)}
+                            className="p-1.5 text-white hover:bg-white/10 rounded transition-all shrink-0"
+                          >
+                            {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                          </button>
+                          
+                          <input 
+                            type="range" 
+                            min="1" 
+                            max={graphData.nodes?.length || 1} 
+                            value={timelineStep || 1} 
+                            onChange={(e) => {
+                              setIsPlaying(false);
+                              setTimelineStep(parseInt(e.target.value));
+                            }}
+                            className="flex-1 h-1 bg-white/15 accent-amber-500 rounded-lg cursor-pointer" 
+                          />
+
+                          <span className="text-[10px] font-mono text-white/60 w-16 text-right">
+                            {timelineStep || 1} / {graphData.nodes?.length || 1}
+                          </span>
+
+                          <button
+                            onClick={() => {
+                              setTimelineStep(null);
+                              setIsPlaying(false);
+                            }}
+                            className="text-[9px] px-2 py-0.5 uppercase tracking-widest text-white/40 hover:text-white hover:bg-white/5 border border-white/10 rounded transition-all"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center pt-20 lg:pt-0">
                   <div className="relative">
