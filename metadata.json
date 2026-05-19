@@ -1,0 +1,8 @@
+{
+  "name": "Remix: GraphMind AI",
+  "description": "Transform unstructured text into interactive AI knowledge graphs with multi-layout physics simulations, version branches, shared node parameters, and a premium built-in documentation system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Master Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Primitives
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isAdmin() { return isVerified() && request.auth.token.email == 'multimaxgameruz@gmail.com'; }
+
+    // 3. Entity Validations
+    function isValidExtraction(data) {
+      return data.keys().hasAll(['userId', 'title', 'inputText', 'graphData'])
+        && data.userId == request.auth.uid
+        && data.title is string
+        && data.graphData is map;
+    }
+
+    // 4. Matches
+    match /extractions/{extractionId} {
+      allow get: if isOwner(existing().userId) || (existing().keys().hasAny(['isShared']) && existing().isShared == true) || isAdmin();
+      allow list: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidExtraction(incoming());
+      allow update: if (isOwner(existing().userId) && isValidExtraction(incoming()))
+                    || (existing().keys().hasAny(['isShared']) && existing().isShared == true && incoming().userId == existing().userId && incoming().graphData is map);
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+  }
+}

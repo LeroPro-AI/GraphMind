@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "extraction": {
+      "title": "Extraction",
+      "description": "A saved knowledge graph extraction session.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the owner." },
+        "title": { "type": "string", "description": "Title of the graph." },
+        "inputText": { "type": "string", "description": "The original text input." },
+        "graphData": { "type": "object", "description": "The serialized knowledge graph JSON." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation." },
+        "isShared": { "type": "boolean", "description": "True if anyone with the link can view or edit this graph." },
+        "versions": {
+          "type": "array",
+          "description": "Historical snapshots/versions of the knowledge graph (v1, v2, v3...)."
+        }
+      },
+      "required": ["userId", "title", "graphData", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/extractions/{extractionId}": {
+      "schema": "extraction",
+      "description": "User saved extractions."
+    }
+  }
+}
