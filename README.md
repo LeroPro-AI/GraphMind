@@ -41,6 +41,11 @@ GraphMind brings together cognitive narrative parsing, high-performance simulati
 *   **☁️ Collaborative Synces & Local Backups**
     *   Save, sync, and reload states with Google Firebase cloud persistence or local storage backups. Share instant workspace copies using URL-based parameters.
 
+*   **📦 Advanced Selection & Bulk Exporting**
+    *   **Multi-Select Mode**: Highlight multiple nodes across the canvas simultaneously to interact with sub-graphs.
+    *   **Smart ZIP Archives**: Click 'Export Selection' to download a complete `.zip` archive containing a unified JSON manifest, a formatted Markdown README, and individual entity files.
+    *   **Bulk Deletion & Purging**: Remove multiple selected entities and immediately clear all of their connected relationships from the active architecture.
+
 ---
 
 ## 📸 Screenshots
@@ -237,6 +242,7 @@ The Generative Model expects to process text and output a reliable, structured s
 | **Freeze Graph** | `Lock` | Stops all real-time simulation physics forces in the viewport instantly. |
 | **Clear View** | `RotateCcw` | Resets the active graph database, cleaning the workspace. |
 | **Layout Switcher** | `Network` | Rotates the placement topology between Force, Circular, Tree, and Grid. |
+| **Multi-Select** | `CheckSquare` | Highlights multiple nodes simultaneously to bulk export or purge from the workspace. |
 | **Edit Mode** | `Code` / `Pencil` | Enables clicking, manual additions, editing text descriptions, and deleting links. |
 | **Undo / Redo** | `Undo` / `Redo` | Rewinds or fast-forwards through layout actions and manual revisions. |
 | **Branches Control** | `GitBranch` | Fork a neural copy of a story timeline into an independent experimental path. |
