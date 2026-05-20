@@ -45,7 +45,7 @@ GraphMind brings together cognitive narrative parsing, high-performance simulati
 
 ## 📸 Screenshots
 
-![GraphMind Interface Mockup](https://raw.githubusercontent.com/username/project/main/screenshots/workspace_main.png)
+![GraphMind Interface Mockup](https://raw.githubusercontent.com/LeroPro-AI/graphmind/screenshots/workspace_main.png)
 *(Drop your custom screenshots at `screenshots/workspace_main.png` to preview the terminal-inspired dark interface.)*
 
 ---
@@ -72,8 +72,8 @@ First, clone the codebase assets to your terminal and install the project depend
 
 ```bash
 # Clone repository assets
-git clone https://github.com/your-username/graphmind-ai.git
-cd graphmind-ai
+git clone https://github.com/LeroPro-AI/graphmind.git
+cd graphmind
 
 # Install high-performance workspace dependencies
 npm install
