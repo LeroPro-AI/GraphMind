@@ -45,7 +45,7 @@ GraphMind brings together cognitive narrative parsing, high-performance simulati
 
 ## 📸 Screenshots
 
-![GraphMind Interface Mockup](https://raw.githubusercontent.com/LeroPro-AI/graphmind/blob/main/screenshots/workspace_main.png)
+![GraphMind Interface Mockup](https://github.com/LeroPro-AI/GraphMind/blob/main/screenshots/workspace_main.png)
 *(Drop your custom screenshots at `screenshots/workspace_main.png` to preview the terminal-inspired dark interface.)*
 
 ---
