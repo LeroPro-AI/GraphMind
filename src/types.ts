@@ -11,6 +11,8 @@ export interface AppSettings {
     repulsionStrength: number;
     gravity: number;
     autoFreeze: boolean;
+    autoFitOnGenerate: boolean;
+    lockLayout: boolean;
   };
   ai: {
     maxNodes: number;

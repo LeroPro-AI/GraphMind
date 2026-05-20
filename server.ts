@@ -158,7 +158,7 @@ const extractSchema = z.object({
 });
 
 // AI PROMPTING LOGIC
-const SYSTEM_PROMPT = (text: string, maxNodes = 25, detailLevel = 'deep', language = 'English', mode = 'general') => {
+const SYSTEM_PROMPT = (text: string, maxNodes = 25, detailLevel = 'deep', language = 'Auto Detect', mode = 'general') => {
   const modeGuidance: Record<string, string> = {
     general: "Extract key entities and relationships for a comprehensive overview.",
     creative: "Focus on character arcs, lore, worldbuilding, plot hooks, and thematic connections. Use types like 'species', 'artifact', 'faction', 'role', 'myth'.",
@@ -175,19 +175,27 @@ const SYSTEM_PROMPT = (text: string, maxNodes = 25, detailLevel = 'deep', langua
     'data', 'law', 'myth', 'theory', 'role'
   ];
 
+  let languageDirective = '';
+  if (language && language !== 'Auto Detect') {
+    languageDirective = `Respond entirely in ${language} regardless of input language.`;
+  } else {
+    languageDirective = `Detect the language of the input text. Write all node labels, descriptions, link labels, and the graph title in the same language as the input. If the input is in Uzbek, respond in Uzbek. If Russian, respond in Russian. If Japanese, respond in Japanese. Never translate or switch to English unless the input itself is in English.`;
+  }
+
   return `
   You are a sophisticated knowledge graph extractor. Your task is to analyze the provided text and transform it into a structured neural map.
   
   Configuration:
   - Macro Blueprint: ${mode.toUpperCase()} - ${modeGuidance[mode] || modeGuidance.general}
   - Context Depth: ${detailLevel === 'deep' ? 'Maximum exhaustive analysis' : 'High-level structural summary'}
-  - Language: Use ${language} for all labels and descriptions.
+  - Language: ${languageDirective}
   - Node Density: Aim for approximately ${maxNodes} interconnected entities.
- 
+  
   Instructions:
   1. Identify key entities relevant to the ${mode} blueprint.
   2. Map directional relationships (source -> target) with active-voice relationship labels.
   3. Ensure every node has a concise 1-sentence description based strictly on the context.
+  4. LANGUAGE REQUIREMENT: ${languageDirective}
   
   Output Format:
   Return ONLY a valid JSON object with this exact structure:

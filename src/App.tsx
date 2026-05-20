@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import JSZip from 'jszip';
 import { 
   Network, 
   Send, 
@@ -24,6 +25,8 @@ import {
   Copy,
   Plus,
   Check,
+  CheckSquare,
+  Download,
   Users,
   Sliders,
   Grid,
@@ -32,7 +35,9 @@ import {
   MoreHorizontal,
   Pause,
   Play,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { GraphCanvas, NODE_COLORS } from './components/GraphCanvas';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -50,6 +55,8 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [currentExtractionId, setCurrentExtractionId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -57,17 +64,58 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [view, setView] = useState<'canvas' | 'dashboard' | 'guide'>('canvas');
+  const [view, setView] = useState<'canvas' | 'dashboard' | 'guide' | 'quantum_3d'>('canvas');
   const [extractions, setExtractions] = useState<any[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { settings, updateSettings } = useSettings();
   const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
+  const [isUiHidden, setIsUiHidden] = useState(false);
+
+  // Keyboard listener to toggle UI hide/show on H key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl) {
+        const tagName = activeEl.tagName.toLowerCase();
+        if (tagName === 'input' || tagName === 'textarea' || activeEl.hasAttribute('contenteditable')) {
+          return;
+        }
+      }
+      if (e.key === 'h' || e.key === 'H') {
+        setIsUiHidden(prev => {
+          const newVal = !prev;
+          if (newVal) {
+            setIsSidebarOpen(false);
+          }
+          return newVal;
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Mobile UI custom view states
   const [mobileDrawer, setMobileDrawer] = useState<'generate' | 'layout' | 'timeline' | 'menu' | null>(null);
-  const [layout, setLayout] = useState<'force' | 'circular' | 'tree' | 'grid'>('force');
+  const [layout, setLayout] = useState<'force' | 'circular' | 'tree' | 'grid' | '3d'>('force');
   const [timelineStep, setTimelineStep] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Fallback helper for layout resize safety
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        if (layout === '3d') {
+          setLayout('force');
+        }
+        if (view === 'quantum_3d') {
+          setView('canvas');
+        }
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [layout, view]);
 
   // Shared Collaboration states
   const [collabActive, setCollabActive] = useState(false);
@@ -87,6 +135,7 @@ const App: React.FC = () => {
   // Undo / Redo history state stacks
   const [history, setHistory] = useState<GraphData[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [isOverflowOpen, setIsOverflowOpen] = useState(false);
 
   // Subgraph state (contains focused node id, if active)
   const [subgraphFocusNodeId, setSubgraphFocusNodeId] = useState<string | null>(null);
@@ -698,6 +747,124 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteSelection = () => {
+    if (!graphData || selectedNodeIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete all ${selectedNodeIds.length} selected entities? This will also remove any connections they have.`)) return;
+
+    const newNodes = (graphData.nodes || []).filter(n => !selectedNodeIds.includes(n.id));
+    const newLinks = (graphData.links || []).filter(l => {
+      const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+      const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+      return !selectedNodeIds.includes(s) && !selectedNodeIds.includes(t);
+    });
+
+    updateGraphStateAndHistory({
+      ...graphData,
+      nodes: newNodes,
+      links: newLinks
+    });
+
+    setSelectedNodeIds([]);
+    setSelectedNode(null);
+  };
+
+  const handleExportSelection = async () => {
+    if (!graphData || selectedNodeIds.length === 0) return;
+
+    const selectedNodes = (graphData.nodes || []).filter(n => selectedNodeIds.includes(n.id));
+    const selectedNodeIdsSet = new Set(selectedNodeIds);
+    const selectedLinks = (graphData.links || []).filter(l => {
+      const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+      const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+      return selectedNodeIdsSet.has(s) && selectedNodeIdsSet.has(t);
+    });
+
+    if (selectedNodes.length === 1) {
+      // Single node JSON download
+      const node = selectedNodes[0];
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(node, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `${node.label.replace(/\s+/g, '_')}_entity.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } else {
+      // 2 or more nodes -> ZIP it up!
+      const zip = new JSZip();
+
+      // 1. Add complete subset JSON file
+      const selectionData = {
+        exportedAt: new Date().toISOString(),
+        mapTitle: graphData.title,
+        nodes: selectedNodes,
+        links: selectedLinks
+      };
+      zip.file("selection_manifest.json", JSON.stringify(selectionData, null, 2));
+
+      // 2. Add individual entity detailed JSON files
+      selectedNodes.forEach(node => {
+        const fileName = `${node.label.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+        zip.file(`entities/${fileName}`, JSON.stringify(node, null, 2));
+      });
+
+      // 3. Add a beautiful Markdown summary README
+      let readmeText = `# Exported Narrative Entities\n\n`;
+      readmeText += `**Map Title:** ${graphData.title}\n`;
+      readmeText += `**Date:** ${new Date().toLocaleString()}\n`;
+      readmeText += `**Selected Entities Count:** ${selectedNodes.length}\n`;
+      readmeText += `**Interconnections Count:** ${selectedLinks.length}\n\n`;
+      readmeText += `## Entities Overview\n\n`;
+      selectedNodes.forEach(n => {
+        readmeText += `### ✦ ${n.label} (${n.type.toUpperCase()})\n`;
+        if (n.description) readmeText += `${n.description}\n\n`;
+      });
+      zip.file("README.md", readmeText);
+
+      // Generate the blob and trigger download
+      try {
+        const content = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(content);
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", url);
+        downloadAnchor.setAttribute("download", `narrative_selection_${Date.now()}.zip`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error("ZIP Generation error:", err);
+        alert("Failed to build ZIP archive.");
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl) {
+        const tagName = activeEl.tagName.toLowerCase();
+        if (tagName === 'input' || tagName === 'textarea' || activeEl.hasAttribute('contenteditable')) {
+          return;
+        }
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedNodeIds.length > 0) {
+          handleDeleteSelection();
+        } else if (selectedNode) {
+          if (confirm(`Are you sure you want to delete "${selectedNode.label}"? This will also remove all connected links.`)) {
+            handleDeleteNode(selectedNode.id);
+            if (subgraphFocusNodeId === selectedNode.id) {
+              setSubgraphFocusNodeId(null);
+            }
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNode, selectedNodeIds, graphData, handleDeleteNode, subgraphFocusNodeId]);
+
   const handleSaveProtocol = async () => {
     if (!graphData) return;
     if (!user && !collabActive) {
@@ -837,6 +1004,18 @@ const App: React.FC = () => {
               count={extractions.length}
             />
           )}
+          <div className="hidden lg:block">
+            <NavBtn 
+              active={view === 'quantum_3d'} 
+              onClick={() => { 
+                setView('quantum_3d'); 
+                setLayout('3d'); 
+                if(window.innerWidth < 1024) setIsSidebarOpen(false); 
+              }} 
+              icon={<Orbit size={14} className="text-amber-500 animate-pulse" />} 
+              label="Quantum 3D Space" 
+            />
+          </div>
           <NavBtn 
             active={view === 'guide'} 
             onClick={() => { setView('guide'); if(window.innerWidth < 1024) setIsSidebarOpen(false); }} 
@@ -1033,7 +1212,7 @@ const App: React.FC = () => {
       <div className="fixed inset-0 pointer-events-none z-50 opacity-[0.01] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,1)_2px,rgba(255,255,255,1)_4px)]" />
 
       {/* Mobile Top Bar */}
-      <header className="lg:hidden absolute top-0 left-0 right-0 h-16 border-b border-white/10 bg-bg z-40 flex items-center justify-between px-6">
+      <header className={`lg:hidden absolute left-0 right-0 border-b bg-bg z-40 flex items-center justify-between px-6 transition-all duration-300 ease-in-out overflow-hidden ${isUiHidden ? 'h-0 opacity-0 border-b-0 py-0 pointer-events-none' : 'h-16 border-white/10 top-0'}`}>
         <div className="flex items-center gap-3">
           <Network size={20} className="text-white/40" />
           <span className="font-serif italic text-xl">GM</span>
@@ -1049,7 +1228,7 @@ const App: React.FC = () => {
       {/* Sidebar Navigation */}
       {/* Mobile sidebar (drawer style) */}
       <AnimatePresence>
-        {isSidebarOpen && (
+        {isSidebarOpen && !isUiHidden && (
           <div className="lg:hidden fixed inset-0 z-50 flex">
             <motion.div
               initial={{ opacity: 0 }}
@@ -1072,8 +1251,10 @@ const App: React.FC = () => {
       </AnimatePresence>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-80 h-full border-r border-white/5 bg-[#09090f] flex-col shrink-0">
-        {renderSidebarContent()}
+      <aside className={`hidden lg:flex h-full bg-[#09090f] flex-col shrink-0 relative transition-all duration-300 ease-in-out overflow-hidden ${isUiHidden ? 'w-0 border-r-0' : 'w-80 border-r border-white/5'}`}>
+        <div className="w-80 h-full flex flex-col shrink-0">
+          {renderSidebarContent()}
+        </div>
       </aside>
 
       {/* Error Banner */}
@@ -1109,17 +1290,44 @@ const App: React.FC = () => {
       <main className={`flex-1 overflow-hidden flex flex-col transition-colors duration-500 ${settings.appearance.theme === 'light' ? 'bg-gray-50' : 'bg-bg'}`}>
         {view === 'canvas' ? (
           <div className="flex-1 flex flex-col relative overflow-hidden">
+            {/* Hide UI floating toggler button */}
+            <button
+              id="hide-ui-toggle-btn"
+              onClick={() => {
+                setIsUiHidden(prev => {
+                  const newVal = !prev;
+                  if (newVal) {
+                    setIsSidebarOpen(false);
+                  }
+                  return newVal;
+                });
+              }}
+              className={`absolute z-40 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold tracking-widest uppercase transition-all duration-300 shadow-lg border backdrop-blur-md ${
+                isUiHidden 
+                  ? 'top-4 right-4 bg-black/60 hover:bg-black/80 text-white border-white/20' 
+                  : 'top-20 lg:top-16 right-4 bg-[#0c0c14]/85 text-white/70 border-white/10 hover:bg-white/10 hover:text-white'
+              }`}
+              title="Toggle full screen view (Hotkey: H)"
+            >
+              {isUiHidden ? <Eye size={12} className="text-amber-500 animate-pulse" /> : <EyeOff size={12} className="text-white/45" />}
+              <span>{isUiHidden ? '⊞ SHOW UI' : '⊟ HIDE UI'}</span>
+            </button>
             {/* Slim 48px Topbar */}
-            <header className="h-12 border-b border-white/5 px-6 flex items-center justify-between shrink-0 bg-[#09090f]/70 backdrop-blur-md z-20">
+            <header className={`border-b px-6 flex items-center justify-between shrink-0 bg-[#09090f]/70 backdrop-blur-md z-20 transition-all duration-300 ease-in-out overflow-hidden ${isUiHidden ? 'h-0 opacity-0 border-b-0 py-0 pointer-events-none' : 'h-12 border-white/5'}`}>
               {/* Left: Layout Switcher */}
               <div className="flex items-center gap-1 bg-white/5 p-1 rounded-sm">
-                {(['force', 'circular', 'tree', 'grid'] as const).map((l) => (
+                {(['force', 'circular', 'tree', 'grid', '3d'] as const).map((l) => (
                   <button 
                     key={l}
-                    onClick={() => setLayout(l)} 
-                    className={`px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-wider font-mono transition-all ${layout === l ? 'bg-white text-black font-semibold' : 'text-white/50 hover:text-white'}`}
+                    onClick={() => {
+                      if (l === '3d' && window.innerWidth < 1024) return;
+                      setLayout(l);
+                    }} 
+                    className={`px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-wider font-mono transition-all ${
+                      l === '3d' ? 'hidden lg:inline-block' : ''
+                    } ${layout === l ? 'bg-white text-black font-semibold' : 'text-white/50 hover:text-white'}`}
                   >
-                    {l === 'force' ? 'Force' : l === 'circular' ? 'Circle' : l === 'tree' ? 'Tree' : 'Grid'}
+                    {l === 'force' ? 'Force' : l === 'circular' ? 'Circle' : l === 'tree' ? 'Tree' : l === 'grid' ? 'Grid' : '3D'}
                   </button>
                 ))}
               </div>
@@ -1142,25 +1350,6 @@ const App: React.FC = () => {
                   {graphData?.nodes?.length || 0} Nodes
                 </span>
 
-                <div className="flex items-center gap-1 bg-white/5 rounded-sm p-0.5">
-                  <button
-                    onClick={handleUndo}
-                    disabled={historyIndex <= 0}
-                    className="p-1 disabled:opacity-25 hover:text-amber-500 transition-all text-white/70"
-                    title="Undo layout edit"
-                  >
-                    <Undo2 size={13} />
-                  </button>
-                  <button
-                    onClick={handleRedo}
-                    disabled={historyIndex >= history.length - 1}
-                    className="p-1 disabled:opacity-25 hover:text-amber-500 transition-all text-white/70"
-                    title="Redo layout edit"
-                  >
-                    <Redo2 size={13} />
-                  </button>
-                </div>
-
                 <button 
                   onClick={() => setIsEditing(!isEditing)}
                   className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 border rounded transition-all ${
@@ -1170,6 +1359,25 @@ const App: React.FC = () => {
                   }`}
                 >
                   {isEditing ? 'Edit: ON' : 'Edit: OFF'}
+                </button>
+
+                <button 
+                  onClick={() => {
+                    setIsMultiSelectMode(!isMultiSelectMode);
+                    if (!isMultiSelectMode) {
+                      setSelectedNodeIds([]);
+                      setSelectedNode(null);
+                    }
+                  }}
+                  className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 border rounded transition-all flex items-center gap-1.5 ${
+                    isMultiSelectMode 
+                      ? 'border-yellow-500 text-yellow-500 bg-yellow-500/10' 
+                      : 'border-white/10 text-white/50 hover:border-white/30 hover:text-white'
+                  }`}
+                  title="Enable multi-selection of entities on the canvas"
+                >
+                  <CheckSquare size={10} className={isMultiSelectMode ? 'text-yellow-500 animate-pulse' : 'text-white/40'} />
+                  {isMultiSelectMode ? 'Select: ON' : 'Multi-Select'}
                 </button>
 
                 <button 
@@ -1189,12 +1397,59 @@ const App: React.FC = () => {
                 >
                   Share
                 </button>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setIsOverflowOpen(!isOverflowOpen)}
+                    className={`p-1 border rounded transition-all flex items-center justify-center ${
+                      isOverflowOpen 
+                        ? 'border-amber-500 text-amber-500 bg-amber-500/10' 
+                        : 'border-white/10 text-white/50 hover:border-white/30 hover:text-white'
+                    }`}
+                    title="More options"
+                  >
+                    <MoreHorizontal size={13} />
+                  </button>
+
+                  {isOverflowOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-30" 
+                        onClick={() => setIsOverflowOpen(false)} 
+                      />
+                      <div className="absolute right-0 mt-1 w-36 bg-[#0c0c14] border border-white/10 rounded shadow-2xl py-1 z-40">
+                        <button
+                          onClick={() => {
+                            handleUndo();
+                            setIsOverflowOpen(false);
+                          }}
+                          disabled={historyIndex <= 0}
+                          className="w-full px-3 py-1.5 text-[10px] uppercase font-bold tracking-wider flex items-center gap-2 hover:bg-white/5 text-white/70 hover:text-white disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-white/70 transition-colors"
+                        >
+                          <Undo2 size={11} />
+                          <span className="flex-1 text-left">Undo</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleRedo();
+                            setIsOverflowOpen(false);
+                          }}
+                          disabled={historyIndex >= history.length - 1}
+                          className="w-full px-3 py-1.5 text-[10px] uppercase font-bold tracking-wider flex items-center gap-2 hover:bg-white/5 text-white/70 hover:text-white disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-white/70 transition-colors"
+                        >
+                          <Redo2 size={11} />
+                          <span className="flex-1 text-left">Redo</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </header>
 
 
             {/* Mobile floating pill indicator */}
-            {graphData && (
+            {graphData && !isUiHidden && (
               <div className="lg:hidden absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex items-center gap-2 bg-[#09090e]/70 backdrop-blur-md border border-white/5 px-4 py-2 rounded-full shadow-lg whitespace-nowrap">
                 <span className="text-[10px] font-medium text-white/95 font-serif italic truncate max-w-[150px]">
                   {graphData.title || 'Untitled Map'}
@@ -1223,7 +1478,7 @@ const App: React.FC = () => {
             </AnimatePresence>
 
             {/* Minimal Mobile Floating Toolbar */}
-            <div className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-35 flex items-center justify-around bg-black/[0.72] backdrop-blur-lg border border-white/10 px-5 py-2.5 rounded-full shadow-2xl w-[90%] max-w-sm">
+            <div className={`lg:hidden fixed left-1/2 -translate-x-1/2 z-35 flex items-center justify-around bg-black/[0.72] backdrop-blur-lg border border-white/10 px-5 rounded-full shadow-2xl w-[90%] max-w-sm transition-all duration-300 ${isUiHidden ? 'bottom-[-100px] opacity-0 pointer-events-none py-0' : 'bottom-6 py-2.5'}`}>
               <button 
                 onClick={() => setMobileDrawer(mobileDrawer === 'generate' ? null : 'generate')}
                 className={`p-2.5 rounded-full transition-all focus:outline-none ${mobileDrawer === 'generate' ? 'text-amber-500 bg-white/5 scale-110' : 'text-white/60 hover:text-white'}`}
@@ -1822,7 +2077,17 @@ const App: React.FC = () => {
                 <>
                   <GraphCanvas 
                     data={getDisplayGraphData() || graphData} 
-                    onNodeClick={setSelectedNode} 
+                    onNodeClick={(node) => {
+                      if (isMultiSelectMode) {
+                        setSelectedNodeIds(prev => 
+                          prev.includes(node.id) 
+                            ? prev.filter(id => id !== node.id) 
+                            : [...prev, node.id]
+                        );
+                      } else {
+                        setSelectedNode(node);
+                      }
+                    }} 
                     isEditing={isEditing}
                     onAddLink={handleAddLink}
                     onDeleteLink={handleDeleteLink}
@@ -1832,10 +2097,12 @@ const App: React.FC = () => {
                     setTimelineStep={setTimelineStep}
                     isPlaying={isPlaying}
                     setIsPlaying={setIsPlaying}
+                    isMultiSelectMode={isMultiSelectMode}
+                    selectedNodeIds={selectedNodeIds}
                   />
 
                   {/* Accordion Collapsible Story Timeline at very bottom of right panel */}
-                  <div className={`absolute bottom-0 left-0 right-0 z-20 border-t border-white/5 bg-[#09090f]/95 backdrop-blur-md transition-all duration-300 ${isTimelineExpanded ? 'h-36' : 'h-10'}`}>
+                  <div className={`absolute bottom-0 left-0 right-0 z-20 border-t bg-[#09090f]/95 backdrop-blur-md transition-all duration-300 overflow-hidden ${isUiHidden ? 'h-0 border-t-0 pointer-events-none' : isTimelineExpanded ? 'h-36 border-white/5' : 'h-10 border-white/5'}`}>
                     <div 
                       onClick={() => setIsTimelineExpanded(!isTimelineExpanded)}
                       className="h-10 px-4 flex items-center justify-between cursor-pointer select-none hover:bg-white/[0.02] transition-colors"
@@ -2000,6 +2267,76 @@ const App: React.FC = () => {
               )}
             </div>
           </div>
+        ) : view === 'quantum_3d' ? (
+          <div className="flex-1 flex flex-col relative overflow-hidden bg-[#07070c]">
+             {/* Beautiful Header for Quantum 3D View */}
+             <header className="h-16 border-b border-white/5 px-6 flex items-center justify-between shrink-0 bg-[#09090f]/75 backdrop-blur-md z-20">
+               <div className="flex items-center gap-3">
+                 <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                 <div>
+                   <h2 className="text-[10px] tracking-[0.3em] uppercase font-bold text-amber-500/90 font-mono">DEDICATED EXPLORER MODULE</h2>
+                   <h1 className="text-sm font-serif italic text-white/90">Quantum 3D Narrative Universe Mapping</h1>
+                 </div>
+               </div>
+
+               <div className="flex items-center gap-3">
+                 <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest bg-white/5 px-2 py-1 rounded">
+                   {graphData?.nodes?.length || 0} Neural Coordinates
+                 </span>
+                 <button 
+                   onClick={() => setView('canvas')} 
+                   className="text-[9px] uppercase tracking-wider font-bold px-3 py-1.5 border border-white/10 hover:border-white/30 hover:bg-white/5 rounded-sm text-white/80 transition-all flex items-center gap-1.5"
+                 >
+                   <Network size={12} />
+                   Switch to 2D Layer
+                 </button>
+               </div>
+             </header>
+
+             {/* Dedicated Full Visual Area */}
+             <div className="flex-1 relative overflow-auto">
+               {graphData ? (
+                 <GraphCanvas 
+                   data={getDisplayGraphData() || graphData} 
+                   onNodeClick={(node) => {
+                      if (isMultiSelectMode) {
+                        setSelectedNodeIds(prev => 
+                          prev.includes(node.id) 
+                            ? prev.filter(id => id !== node.id) 
+                            : [...prev, node.id]
+                        );
+                      } else {
+                        setSelectedNode(node);
+                      }
+                    }} 
+                    isMultiSelectMode={isMultiSelectMode}
+                    selectedNodeIds={selectedNodeIds}
+                    isEditing={false}
+                   onAddLink={handleAddLink}
+                   onDeleteLink={handleDeleteLink}
+                   layout="3d"
+                   setLayout={() => {}}
+                 />
+               ) : (
+                 <div className="w-full h-full flex flex-col items-center justify-center text-white/20">
+                   <Orbit size={48} strokeWidth={0.5} className="mb-4 text-amber-500 animate-[spin_8s_linear_infinite]" />
+                   <p className="text-xs uppercase tracking-widest">No Narrative Signal Processed</p>
+                 </div>
+               )}
+             </div>
+
+             {/* Dynamic controls and helper badge */}
+             <div className="absolute bottom-6 left-6 z-20 bg-[#09090f]/90 border border-white/10 backdrop-blur-md px-4 py-3 max-w-[280px] pointer-events-auto rounded">
+               <p className="text-[9px] uppercase tracking-widest font-bold text-amber-400 mb-1 font-mono">Quantum Navigation Matrix</p>
+               <p className="text-[10px] text-white/60 leading-relaxed font-sans">
+                 Interact with entities in multi-dimensional space. Select nodes to inspect coordinates or toggle pin structures.
+               </p>
+               <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5 text-[9px] font-mono text-white/40">
+                 <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Rotate (Left Click)</span>
+                 <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-cyan-400" /> Inspect (Click Node)</span>
+               </div>
+             </div>
+          </div>
         ) : (
           <div className="flex-1 overflow-y-auto bg-bg">
             <HelpAndGuide />
@@ -2053,19 +2390,20 @@ const App: React.FC = () => {
                         </span>
                       )}
                       
-                      {isEditing && (
-                        <button 
-                          onClick={() => {
+                      <button 
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete "${selectedNode.label}"? This will also remove all connected links.`)) {
                             handleDeleteNode(selectedNode.id);
                             if (subgraphFocusNodeId === selectedNode.id) {
                               setSubgraphFocusNodeId(null);
                             }
-                          }}
-                          className="text-[9px] text-red-500 hover:text-red-400 font-bold uppercase tracking-widest ml-auto"
-                        >
-                          Purge Entity
-                        </button>
-                      )}
+                          }
+                        }}
+                        className="text-[9px] text-red-500 hover:text-red-400 font-bold uppercase tracking-widest ml-auto bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded transition-colors"
+                        title="Purge this entity and all connected links"
+                      >
+                        Purge Entity
+                      </button>
                     </div>
                     {isEditing ? (
                       <input 

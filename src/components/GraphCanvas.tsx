@@ -3,6 +3,7 @@ import { renderToString } from 'react-dom/server';
 import * as d3 from 'd3';
 import { Node, Link, GraphData, NodeType } from '../types';
 import { useSettings } from '../context/SettingsContext';
+import { Graph3DCanvas } from './Graph3DCanvas';
 import { 
   Play, 
   Pause, 
@@ -80,12 +81,14 @@ interface GraphCanvasProps {
   isEditing?: boolean;
   onAddLink?: (sourceId: string, targetId: string) => void;
   onDeleteLink?: (sourceId: string, targetId: string) => void;
-  layout?: 'force' | 'circular' | 'tree' | 'grid';
-  setLayout?: (layout: 'force' | 'circular' | 'tree' | 'grid') => void;
+  layout?: 'force' | 'circular' | 'tree' | 'grid' | '3d';
+  setLayout?: (layout: 'force' | 'circular' | 'tree' | 'grid' | '3d') => void;
   timelineStep?: number | null;
   setTimelineStep?: (step: number | null) => void;
   isPlaying?: boolean;
   setIsPlaying?: (playing: boolean) => void;
+  isMultiSelectMode?: boolean;
+  selectedNodeIds?: string[];
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({ 
@@ -99,19 +102,32 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   timelineStep: propTimelineStep,
   setTimelineStep: propSetTimelineStep,
   isPlaying: propIsPlaying,
-  setIsPlaying: propSetIsPlaying
+  setIsPlaying: propSetIsPlaying,
+  isMultiSelectMode = false,
+  selectedNodeIds = []
 }) => {
   const { settings } = useSettings();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const linkInitiatorRef = useRef<string | null>(null);
+  const fittedDatasetRef = useRef<string | null>(null);
+
+  // Position persistent cache and fingerprint check to lock graph positions
+  const nodePositionsRef = useRef<Record<string, { x: number, y: number, fx: number | null, fy: number | null }>>({});
+  const lastGraphFingerprintRef = useRef<string | null>(null);
+
+  const currentFingerprint = `${data.title || ''}-${(data.nodes || []).length}-${(data.links || []).length}`;
+  if (lastGraphFingerprintRef.current !== currentFingerprint) {
+    nodePositionsRef.current = {};
+    lastGraphFingerprintRef.current = currentFingerprint;
+  }
   
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   
-  // Layout states: 'force' | 'circular' | 'tree' | 'grid'
-  const [localLayout, setLocalLayout] = useState<'force' | 'circular' | 'tree' | 'grid'>('force');
+  // Layout states: 'force' | 'circular' | 'tree' | 'grid' | '3d'
+  const [localLayout, setLocalLayout] = useState<'force' | 'circular' | 'tree' | 'grid' | '3d'>('force');
   const layout = propLayout !== undefined ? propLayout : localLayout;
-  const setLayout: React.Dispatch<React.SetStateAction<'force' | 'circular' | 'tree' | 'grid'>> = propSetLayout !== undefined ? (propSetLayout as any) : setLocalLayout;
+  const setLayout: React.Dispatch<React.SetStateAction<'force' | 'circular' | 'tree' | 'grid' | '3d'>> = propSetLayout !== undefined ? (propSetLayout as any) : setLocalLayout;
   
   // Timeline sequence animation states
   const [localTimelineStep, setLocalTimelineStep] = useState<number | null>(null);
@@ -159,7 +175,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   }, [isPlaying, timelineStep, data.nodes.length]);
 
   useEffect(() => {
-    if (!svgRef.current || dimensions.width === 0 || dimensions.height === 0 || !data || !data.nodes) return;
+    if (!svgRef.current || dimensions.width === 0 || dimensions.height === 0 || !data || !data.nodes || layout === '3d') return;
 
     const svg = d3.select(svgRef.current);
     const width = dimensions.width;
@@ -181,6 +197,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .scaleExtent([0.1, 5])
       .on('zoom', (event) => {
         g.attr('transform', event.transform);
+        
+        // Hide labels below 0.6 zoom scale with clean transitions
+        const currentScale = event.transform.k;
+        const labelOpacity = currentScale < 0.6 ? 0 : 1;
+        g.selectAll('.node text')
+          .style('opacity', labelOpacity)
+          .style('transition', 'opacity 0.25s ease-in-out');
       })
       .filter((event) => {
          return !linkInitiatorRef.current;
@@ -223,7 +246,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     const visibleRawNodes = rawNodes.slice(0, currentStepCount);
     const visibleIds = new Set(visibleRawNodes.map(n => n.id));
 
-    const nodes = visibleRawNodes.map(d => ({ ...d }));
+    const nodes = visibleRawNodes.map(d => {
+      const cached = nodePositionsRef.current[d.id];
+      if (cached) {
+        return {
+          ...d,
+          x: cached.x,
+          y: cached.y,
+          fx: settings.physics.lockLayout ? cached.x : cached.fx,
+          fy: settings.physics.lockLayout ? cached.y : cached.fy
+        };
+      }
+      return { ...d };
+    });
     const links = (data.links || [])
       .filter(l => {
         const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
@@ -239,6 +274,21 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       degreeMap.set(sId, (degreeMap.get(sId) || 0) + 1);
       degreeMap.set(tId, (degreeMap.get(tId) || 0) + 1);
     });
+
+    // Node count and sizing scaling
+    const totalNodeCount = rawNodes.length;
+    let activeSizeSetting = settings.appearance.nodeSize;
+    if (totalNodeCount > 20) {
+      activeSizeSetting = 'small';
+    }
+    const nodeConf = NODE_SIZES[activeSizeSetting];
+    const isHighlyDense = totalNodeCount > 35;
+    const sizeMultiplier = isHighlyDense ? 0.6 : 1.0;
+
+    const getNodeRadius = (d: any) => {
+      const baseR = nodeConf.r + Math.min((degreeMap.get(d.id) || 0) * nodeConf.degreeScale, 12);
+      return baseR * sizeMultiplier;
+    };
 
     // Compute static layout positions if not dynamic force layout
     if (layout === 'circular') {
@@ -322,12 +372,24 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
     }
 
-    // Set up D3 simulation
+    // Force simulation configurations with robust density solutions
+    let repulsion = settings.physics.repulsionStrength > -400 ? -400 : settings.physics.repulsionStrength;
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      repulsion = repulsion * 1.2;
+    }
+
+    const linkDist = Math.max(settings.physics.linkDistance, 120);
+
     const simulation = d3.forceSimulation(nodes as any)
-      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(settings.physics.linkDistance).strength(0.5))
-      .force('charge', d3.forceManyBody().strength(settings.physics.repulsionStrength))
+      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(linkDist).strength(0.5))
+      .force('charge', d3.forceManyBody().strength(repulsion))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(45));
+      .force('collision', d3.forceCollide().radius((d: any) => {
+        const nodeRad = getNodeRadius(d);
+        const labelLength = d.label ? d.label.length : 0;
+        return nodeRad + labelLength * 4;
+      }));
 
     if (settings.physics.autoFreeze || layout !== 'force') {
       simulation.alphaDecay(0.06); // Faster settle for static/frozen layouts
@@ -459,11 +521,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         if (onNodeClick) onNodeClick(d as Node);
       });
 
-    const nodeConf = NODE_SIZES[settings.appearance.nodeSize];
-
-    // Background Bubble Frame
+    // Background Bubble Frame using custom sizing
     nodeLayer.append('circle')
-      .attr('r', (d: any) => nodeConf.r + Math.min((degreeMap.get(d.id) || 0) * nodeConf.degreeScale, 12))
+      .attr('r', (d: any) => getNodeRadius(d))
       .attr('fill', (d: any) => {
         if (d.diffStatus === 'added') return isLight ? '#dcfce7' : '#14532d'; // green-100 / green-900
         if (d.diffStatus === 'removed') return isLight ? '#fee2e2' : '#7f1d1d'; // red-100 / red-900
@@ -493,18 +553,30 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         return null;
       });
 
+    // Beautiful Selection Outer Ring Frame
+    nodeLayer.append('circle')
+      .attr('r', (d: any) => getNodeRadius(d) + 6)
+      .attr('fill', 'none')
+      .attr('stroke', '#f59e0b') // Amber/Yellow selection stroke
+      .attr('stroke-width', 2)
+      .attr('stroke-dasharray', '3,3')
+      .attr('stroke-opacity', (d: any) => (selectedNodeIds && selectedNodeIds.includes(d.id)) ? 1 : 0)
+      .attr('class', 'selection-ring');
+
     // ICON INSIDE BUBBLE
     nodeLayer.append('foreignObject')
       .attr('x', (d: any) => {
-         const size = (nodeConf.r + Math.min((degreeMap.get(d.id) || 0) * nodeConf.degreeScale, 12)) * 1.6;
+         const nodeRad = getNodeRadius(d);
+         const size = nodeRad * 1.6;
          return -size / 2;
       })
       .attr('y', (d: any) => {
-         const size = (nodeConf.r + Math.min((degreeMap.get(d.id) || 0) * nodeConf.degreeScale, 12)) * 1.6;
+         const nodeRad = getNodeRadius(d);
+         const size = nodeRad * 1.6;
          return -size / 2;
       })
-      .attr('width', (d: any) => (nodeConf.r + Math.min((degreeMap.get(d.id) || 0) * nodeConf.degreeScale, 12)) * 1.6)
-      .attr('height', (d: any) => (nodeConf.r + Math.min((degreeMap.get(d.id) || 0) * nodeConf.degreeScale, 12)) * 1.6)
+      .attr('width', (d: any) => getNodeRadius(d) * 1.6)
+      .attr('height', (d: any) => getNodeRadius(d) * 1.6)
       .style('pointer-events', 'none')
       .append('xhtml:div')
       .style('width', '100%')
@@ -514,17 +586,23 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .style('justify-content', 'center')
       .style('color', isLight ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)')
       .html((d: any) => {
+        const nodeRad = getNodeRadius(d);
         if (d.customIcon) {
-          const fontSize = (nodeConf.r + Math.min((degreeMap.get(d.id) || 0) * nodeConf.degreeScale, 12)) * 0.95;
+          const fontSize = nodeRad * 0.95;
           return `<span style="font-size: ${fontSize}px; line-height: 1;">${d.customIcon}</span>`;
         }
         const Icon = NODE_ICONS[d.type] || NODE_ICONS.other;
         return renderToString(<Icon size="75%" strokeWidth={2.5} color="currentColor" />);
       });
 
-    // Label under or over the node bubble
+    // Label under or over the node bubble with zoom-based visibility fade on initialization
+    const initialScale = d3.zoomTransform(svg.node() as any).k;
+
     nodeLayer.append('text')
-      .attr('dy', (d: any) => -(nodeConf.labelOffset + Math.min((degreeMap.get(d.id) || 0) * nodeConf.degreeScale, 12)))
+      .attr('dy', (d: any) => {
+        const nodeRad = getNodeRadius(d);
+        return -(nodeRad + 10);
+      })
       .attr('text-anchor', 'middle')
       .attr('fill', isLight ? '#0f0f13' : 'rgba(255, 255, 255, 0.85)')
       .attr('font-weight', '500')
@@ -532,9 +610,21 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .attr('letter-spacing', '0.4px')
       .attr('font-family', '"Inter", sans-serif')
       .style('pointer-events', 'none')
+      .style('opacity', initialScale < 0.6 ? 0 : 1)
+      .style('transition', 'opacity 0.25s ease-in-out')
       .text((d: any) => d.label);
 
     simulation.on('tick', () => {
+      // Save current coordinates in the persistent ref cache
+      nodes.forEach((d: any) => {
+        nodePositionsRef.current[d.id] = {
+          x: d.x,
+          y: d.y,
+          fx: d.fx !== undefined ? d.fx : null,
+          fy: d.fy !== undefined ? d.fy : null
+        };
+      });
+
       linkLayer
         .attr('x1', (d: any) => d.source.x)
         .attr('y1', (d: any) => d.source.y)
@@ -556,9 +646,82 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       nodeLayer.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
     });
 
+    // Auto-fit function inside useEffect hook
+    const fitToViewport = (smooth = true) => {
+      if (nodes.length === 0) return;
+
+      const minX = d3.min(nodes, (d: any) => d.x) ?? 0;
+      const maxX = d3.max(nodes, (d: any) => d.x) ?? width;
+      const minY = d3.min(nodes, (d: any) => d.y) ?? 0;
+      const maxY = d3.max(nodes, (d: any) => d.y) ?? height;
+
+      const padding = 40;
+      const graphWidth = (maxX - minX) || 1;
+      const graphHeight = (maxY - minY) || 1;
+
+      let scale = Math.min(
+        (width - padding * 2) / graphWidth,
+        (height - padding * 2) / graphHeight
+      );
+
+      scale = Math.max(0.15, Math.min(2.0, scale));
+
+      const isMobileDevice = window.innerWidth < 768;
+      if (isMobileDevice) {
+        scale = scale * 0.9;
+      }
+
+      const graphCenterX = (minX + maxX) / 2;
+      const graphCenterY = (minY + maxY) / 2;
+
+      const tx = width / 2 - scale * graphCenterX;
+      const ty = height / 2 - scale * graphCenterY;
+
+      const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+
+      // Trigger standard zoom scale opacity check so that labels toggle immediately
+      const labelOpacity = scale < 0.6 ? 0 : 1;
+      g.selectAll('.node text')
+        .style('opacity', labelOpacity)
+        .style('transition', 'opacity 0.25s ease-in-out');
+
+      if (smooth) {
+        svg.transition()
+          .duration(750)
+          .ease(d3.easeCubicOut)
+          .call(zoom.transform, transform);
+      } else {
+        svg.call(zoom.transform, transform);
+      }
+    };
+
+    simulation.on('end', () => {
+      const datasetFingerprint = `${data.nodes.length}-${data.links.length}-${data.title}-${layout}`;
+      if (settings.physics.autoFitOnGenerate !== false && fittedDatasetRef.current !== datasetFingerprint) {
+        fittedDatasetRef.current = datasetFingerprint;
+        fitToViewport(true);
+      }
+
+      // Automatically lock all node positions if Lock Layout is ON
+      if (settings.physics.lockLayout) {
+        nodes.forEach((d: any) => {
+          d.fx = d.x;
+          d.fy = d.y;
+          nodePositionsRef.current[d.id] = {
+            x: d.x,
+            y: d.y,
+            fx: d.x,
+            fy: d.y
+          };
+        });
+      }
+    });
+
     function dragStarted(event: any, d: any) {
       if (layout !== 'force') return; // Cannot drag to reposition logic on non-force layouts
-      if (!event.active) simulation.alphaTarget(0.3).restart();
+      if (!settings.physics.lockLayout) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+      }
       d.fx = d.x;
       d.fy = d.y;
     }
@@ -567,19 +730,38 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       if (layout !== 'force') return;
       d.fx = event.x;
       d.fy = event.y;
+
+      // Keep positions ref cache updated in real-time
+      nodePositionsRef.current[d.id] = {
+        x: event.x,
+        y: event.y,
+        fx: settings.physics.lockLayout ? event.x : null,
+        fy: settings.physics.lockLayout ? event.y : null
+      };
     }
 
     function dragEnded(event: any, d: any) {
       if (layout !== 'force') return;
-      if (!event.active) simulation.alphaTarget(0);
-      d.fx = null;
-      d.fy = null;
+      if (!settings.physics.lockLayout) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      } else {
+        d.fx = d.x;
+        d.fy = d.y;
+        nodePositionsRef.current[d.id] = {
+          x: d.x,
+          y: d.y,
+          fx: d.x,
+          fy: d.y
+        };
+      }
     }
 
     return () => {
       simulation.stop();
     };
-  }, [data, layout, timelineStep, isEditing, onAddLink, onDeleteLink, dimensions.width, dimensions.height, settings]);
+  }, [data, layout, timelineStep, isEditing, onAddLink, onDeleteLink, dimensions.width, dimensions.height, settings, selectedNodeIds]);
 
   const handleTimelineReset = () => {
     setTimelineStep(null);
@@ -595,13 +777,37 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     <div ref={containerRef} className={`w-full h-full relative overflow-hidden flex flex-col ${settings.appearance.theme === 'light' ? 'bg-gray-50' : 'bg-[#0a0a0f]'}`} id="graph-viewport">
       
       {/* SVG Canvas Area */}
-      <div className="flex-1 w-full h-full relative">
+      <div 
+        className="absolute inset-0 transition-opacity duration-500 ease-in-out"
+        style={{ opacity: layout === '3d' ? 0 : 1, pointerEvents: layout === '3d' ? 'none' : 'auto' }}
+      >
         <svg ref={svgRef} className="w-full h-full cursor-move" />
       </div>
 
+      {/* Three.js 3D Canvas Area */}
+      {layout === '3d' && (
+        <div 
+          className="absolute inset-0 transition-opacity duration-500 ease-in-out"
+          style={{ opacity: layout === '3d' ? 1 : 0, pointerEvents: layout === '3d' ? 'auto' : 'none' }}
+        >
+          <Graph3DCanvas 
+            data={data}
+            onNodeClick={onNodeClick}
+            theme={settings.appearance.theme}
+            timelineStep={timelineStep}
+            selectedNodeIds={selectedNodeIds}
+          />
+        </div>
+      )}
+
       {/* Manual Status Indicator */}
-      <div className={`absolute bottom-4 right-4 text-[9px] uppercase tracking-[0.2em] pointer-events-none text-right ${settings.appearance.theme === 'light' ? 'text-gray-400' : 'text-gray-500'}`}>
-        {isEditing ? (
+      <div className={`absolute bottom-4 right-4 text-[9px] uppercase tracking-[0.2em] pointer-events-none text-right z-10 ${settings.appearance.theme === 'light' ? 'text-gray-400' : 'text-gray-500'}`}>
+        {layout === '3d' ? (
+          <div>
+            3D Quantum Mode Active<br />
+            Drag to Rotate · Scroll to Zoom
+          </div>
+        ) : isEditing ? (
           <div>
             Shift + Drag Node to Link<br />
             Click link to delete

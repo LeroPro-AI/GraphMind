@@ -14,11 +14,13 @@ const DEFAULT_SETTINGS: AppSettings = {
     repulsionStrength: -400,
     gravity: 0.1,
     autoFreeze: true,
+    autoFitOnGenerate: true,
+    lockLayout: true,
   },
   ai: {
     maxNodes: 25,
     detailLevel: 'deep',
-    language: 'English',
+    language: 'Auto Detect',
     customNodeTypes: [],
     mode: 'general',
   },
@@ -47,7 +49,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const saved = localStorage.getItem('neural_mapping_settings');
     if (saved) {
       try {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        return {
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          appearance: { ...DEFAULT_SETTINGS.appearance, ...(parsed.appearance || {}) },
+          physics: { ...DEFAULT_SETTINGS.physics, ...(parsed.physics || {}) },
+          ai: { ...DEFAULT_SETTINGS.ai, ...(parsed.ai || {}) },
+          api: { ...DEFAULT_SETTINGS.api, ...(parsed.api || {}) },
+        };
       } catch (e) {
         console.warn('Failed to parse settings, using defaults');
       }

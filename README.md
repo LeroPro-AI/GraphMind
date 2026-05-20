@@ -45,7 +45,7 @@ GraphMind brings together cognitive narrative parsing, high-performance simulati
 
 ## 📸 Screenshots
 
-![GraphMind Interface Mockup](https://github.com/LeroPro-AI/GraphMind/blob/main/screenshots/workspace_main.png)
+![GraphMind Interface Mockup](https://raw.githubusercontent.com/username/project/main/screenshots/workspace_main.png)
 *(Drop your custom screenshots at `screenshots/workspace_main.png` to preview the terminal-inspired dark interface.)*
 
 ---
@@ -72,8 +72,8 @@ First, clone the codebase assets to your terminal and install the project depend
 
 ```bash
 # Clone repository assets
-git clone https://github.com/LeroPro-AI/graphmind.git
-cd graphmind
+git clone https://github.com/your-username/graphmind-ai.git
+cd graphmind-ai
 
 # Install high-performance workspace dependencies
 npm install
@@ -92,15 +92,10 @@ Open `.env` in your text editor and furnish your authentication parameters and A
 # Google Gemini Generative API core key (Accessed server-side only)
 GEMINI_API_KEY=your_gemini_api_key_here
 
-LLMAPI_KEY="your_openai_or_alternate_provider_key"
-AKI_KEY="your_aki_io_key"
-
 # Firebase Admin SDK Configuration (Optional, for neural repository cloud saving/sharing)
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=your-service-account-email
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
-# The deployment Cloud Run service URL (Injected automatically at runtime)
-APP_URL="http://localhost:3000"
 ```
 
 > ⚠️ **Key Safety Rules**: To prevent security breaches, server-side API keys (`GEMINI_API_KEY` etc.) are kept private and never exposed to client browsers. Never prefix sensitive keys with `VITE_`.

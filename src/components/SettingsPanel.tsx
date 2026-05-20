@@ -214,6 +214,24 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     <div className={`absolute top-1 left-1 w-3 h-3 rounded-full transition-all ${settings.physics.autoFreeze ? 'translate-x-5 bg-black' : 'bg-gray-500'}`} />
                   </button>
                 </ControlLine>
+
+                <ControlLine label="Auto-Fit on Generate" description="Fits the graph into view after generation">
+                  <button 
+                    onClick={() => updateSettings({ physics: { ...settings.physics, autoFitOnGenerate: !settings.physics.autoFitOnGenerate } })}
+                    className={`w-10 h-5 rounded-full relative transition-colors ${settings.physics.autoFitOnGenerate ? 'bg-white' : 'bg-white/10'}`}
+                  >
+                    <div className={`absolute top-1 left-1 w-3 h-3 rounded-full transition-all ${settings.physics.autoFitOnGenerate ? 'translate-x-5 bg-black' : 'bg-gray-500'}`} />
+                  </button>
+                </ControlLine>
+
+                <ControlLine label="Lock Layout" description="Freeze node positions after simulation settles.">
+                  <button 
+                    onClick={() => updateSettings({ physics: { ...settings.physics, lockLayout: !settings.physics.lockLayout } })}
+                    className={`w-10 h-5 rounded-full relative transition-colors ${settings.physics.lockLayout ? 'bg-white' : 'bg-white/10'}`}
+                  >
+                    <div className={`absolute top-1 left-1 w-3 h-3 rounded-full transition-all ${settings.physics.lockLayout ? 'translate-x-5 bg-black' : 'bg-gray-500'}`} />
+                  </button>
+                </ControlLine>
               </Section>
 
               <Section title="AI Intelligence" icon={Cpu}>
@@ -264,15 +282,24 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </ControlLine>
 
                 <ControlLine label="Output Dialect" description="Preferred language for entities">
-                  <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-2">
+                  <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-sm">
                     <Globe size={12} className="text-gray-500" />
-                    <input 
-                      type="text"
-                      value={settings.ai.language}
+                    <select 
+                      value={settings.ai.language || 'Auto Detect'}
                       onChange={(e) => updateSettings({ ai: { ...settings.ai, language: e.target.value } })}
-                      className="bg-transparent text-xs outline-none w-24"
-                      placeholder="English"
-                    />
+                      className="bg-transparent text-xs text-white outline-none cursor-pointer border-none p-0 w-32 font-sans"
+                    >
+                      <option value="Auto Detect" className="bg-[#12121e] text-white">Auto Detect</option>
+                      <option value="English" className="bg-[#12121e] text-white">English</option>
+                      <option value="Uzbek" className="bg-[#12121e] text-white">Uzbek</option>
+                      <option value="Russian" className="bg-[#12121e] text-white">Russian</option>
+                      <option value="Japanese" className="bg-[#12121e] text-white">Japanese</option>
+                      <option value="Korean" className="bg-[#12121e] text-white">Korean</option>
+                      <option value="Chinese" className="bg-[#12121e] text-white">Chinese</option>
+                      <option value="Spanish" className="bg-[#12121e] text-white">Spanish</option>
+                      <option value="German" className="bg-[#12121e] text-white">German</option>
+                      <option value="French" className="bg-[#12121e] text-white">French</option>
+                    </select>
                   </div>
                 </ControlLine>
               </Section>
