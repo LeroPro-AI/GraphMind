@@ -92,10 +92,15 @@ Open `.env` in your text editor and furnish your authentication parameters and A
 # Google Gemini Generative API core key (Accessed server-side only)
 GEMINI_API_KEY=your_gemini_api_key_here
 
+LLMAPI_KEY="your_openai_or_alternate_provider_key"
+AKI_KEY="your_aki_io_key"
+
 # Firebase Admin SDK Configuration (Optional, for neural repository cloud saving/sharing)
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=your-service-account-email
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
+# The deployment Cloud Run service URL (Injected automatically at runtime)
+APP_URL="http://localhost:3000"
 ```
 
 > ⚠️ **Key Safety Rules**: To prevent security breaches, server-side API keys (`GEMINI_API_KEY` etc.) are kept private and never exposed to client browsers. Never prefix sensitive keys with `VITE_`.
