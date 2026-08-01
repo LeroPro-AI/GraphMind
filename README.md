@@ -324,4 +324,4 @@ Contributions are welcomed! Whether you want to improve physics simulation calcu
 
 ## 📄 License
 
-This project is licensed under the terms of the [MIT License](LICENSE). Feel free to bundle, remix, or integrate it into larger worldbuilding software suites.
+This project is licensed under the terms of the [MIT License](LICENSE.md). Feel free to bundle, remix, or integrate it into larger worldbuilding software suites.
